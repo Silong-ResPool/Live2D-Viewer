@@ -1,206 +1,1806 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"     content="width=device-width, initial-scale=1.0">
-  <meta name="description"  content="A feature-rich, browser-based Live2D model viewer using pixi-live2d-display.">
-  <meta name="theme-color"  content="#8c5eff">
-  <meta property="og:image" content="https://raw.githubusercontent.com/ImDuck42/Live2D-Viewer/master/assets/screenshots/PreviewPC.png">
-
-  <title>Live2D Viewer</title>
-  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" sizes="any">
-
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/repoexplorer.css">
-  <link rel="stylesheet" href="css/newsmodal.css">
-  <link rel="stylesheet" href="css/context.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Live2D 模型</title>
+<style>
+  :root{--topH:62px;--botH:12px;
+    --bg1:#0E0620;--bg2:#160A2E;--bg3:#0B0418;
+    --card:rgba(48,24,86,.72);--line:rgba(168,85,247,.28);--txt:#F1E9FF;--sub:#C4AEE8;
+    --vio:#7C3AED;--vio2:#A855F7;--cy:#22D3EE;--pink:#F472B6;--gold:#FBBF24}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg1);color:var(--txt);
+    font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  /* 模型展示区：夹在顶栏下沿与底部间隔之间 */
+  #stage{position:fixed;left:0;right:0;top:var(--topH);bottom:var(--botH);overflow:hidden;border-radius:14px;
+    background:radial-gradient(900px 600px at 20% 10%,rgba(124,58,237,.30),transparent 60%),
+      radial-gradient(800px 600px at 85% 85%,rgba(34,211,238,.16),transparent 60%),
+      linear-gradient(160deg,var(--bg1),var(--bg2) 55%,var(--bg3))}
+  body.fs{--topH:0px;--botH:0px}
+  body.fs #stage{border-radius:0}
+  #bgMedia,#bgVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;opacity:.55;pointer-events:none}
+  #cv{position:absolute;inset:0;width:100% !important;height:100% !important;max-width:100%;max-height:100%;display:block;touch-action:none}
+  /* 顶栏：☰ + 已加载模型标签 + 模型库按钮 */
+  #topbar{position:fixed;left:0;right:0;top:0;z-index:22;display:flex;align-items:center;gap:10px;padding:8px 12px 4px}
+  #menubtn{flex:0 0 auto;width:44px;height:44px;font-size:20px;padding:0}
+  #chips{flex:1 1 auto;min-width:0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+  #chips::-webkit-scrollbar{display:none}
+  #pickerbtn{flex:0 0 auto;width:44px;height:44px;font-size:18px;padding:0}
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 14px;border-radius:12px;
+    border:1px solid var(--line);background:var(--card);color:var(--txt);font-size:12.5px;cursor:pointer;white-space:nowrap}
+  .btn.pri{background:linear-gradient(135deg,var(--vio),var(--vio2));border-color:transparent;font-weight:600}
+  .btn.gold{background:linear-gradient(135deg,#B45309,var(--gold));border-color:transparent;color:#2A1A00;font-weight:600}
+  .btn.on{background:linear-gradient(135deg,#B45309,var(--gold));border-color:transparent;color:#2A1A00;font-weight:600}
+  .chip{flex:0 0 auto;min-height:40px;display:inline-flex;align-items:center;max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip.on{background:linear-gradient(135deg,var(--vio),var(--vio2));border-color:transparent;font-weight:600}
+  /* 左侧边栏 */
+  #sidebar{position:fixed;left:0;top:0;bottom:0;z-index:45;width:min(88vw,400px);overflow:auto;padding:14px 14px 28px;
+    background:linear-gradient(170deg,rgba(38,18,66,.985),rgba(16,7,36,.99));border-right:1px solid var(--line);
+    transform:translateX(-104%);transition:transform .24s cubic-bezier(.2,.9,.2,1)}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar:not(.open){pointer-events:none}
+  .sbHead{display:flex;align-items:center;gap:10px;margin:2px 0 12px}
+  .sbHead b{flex:1;font-size:17px;background:linear-gradient(90deg,var(--cy),var(--vio2),var(--pink));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .grp{background:rgba(0,0,0,.22);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+  .grp h3{margin:0 0 8px;font-size:13.5px;color:var(--gold);letter-spacing:.5px}
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row>label{flex:0 0 62px;font-size:12.5px;color:var(--sub)}
+  .val{flex:0 0 46px;text-align:right;font-size:11.5px;color:var(--sub)}
+  select,input[type=text]{flex:1 1 auto;min-width:0;height:38px;background:rgba(12,5,28,.85);color:var(--txt);
+    border:1px solid var(--line);border-radius:10px;padding:0 10px;font-size:12.5px}
+  input[type=range]{flex:1 1 auto;min-width:0;accent-color:var(--vio2)}
+  input[type=range]:disabled{opacity:.32}
+  input[type=checkbox]{width:20px;height:20px;accent-color:var(--vio2)}
+  .btns{display:flex;gap:8px;margin-top:8px}
+  .btns>.btn{flex:1 1 0;min-width:0}
+  .hint{font-size:11px;color:var(--sub);line-height:1.6;margin-top:6px}
+  /* 动作/表情/触发区按钮面板 */
+  .featGrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .featBtn{flex:0 0 auto;max-width:100%;min-height:34px;padding:6px 11px;border-radius:10px;font-size:12px;
+    border:1px solid var(--line);background:rgba(48,24,86,.6);color:var(--txt);cursor:pointer;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .featBtn.hl{background:linear-gradient(135deg,var(--vio),var(--vio2));border-color:transparent;font-weight:600}
+  .featEmpty{font-size:11.5px;color:var(--sub);margin:4px 0}
+  /* 通用浮层 */
+  #mask{position:fixed;inset:0;z-index:30;background:rgba(6,2,16,.72);display:none}
+  #tip{position:fixed;left:50%;bottom:70px;transform:translateX(-50%);z-index:50;pointer-events:none;
+    background:rgba(20,8,40,.94);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12px;color:var(--txt);display:none}
+  #editbar{position:fixed;left:50%;bottom:calc(var(--botH) + 14px);transform:translateX(-50%);z-index:40;display:none;
+    align-items:center;gap:8px;background:rgba(20,8,40,.95);border:1px solid var(--line);border-radius:999px;
+    padding:7px 10px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  #editbar.show{display:flex}
+  #editbarTxt{font-size:11.5px;color:var(--sub);white-space:nowrap}
+  #empty{position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:15;pointer-events:none;text-align:center;color:var(--sub);font-size:13px;line-height:1.9}
+  #empty b{display:block;font-size:16px;margin-bottom:6px;color:var(--txt)}
+  #loading{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:60;display:none;text-align:center}
+  .spin{width:34px;height:34px;margin:0 auto 8px;border:3px solid rgba(168,85,247,.3);border-top-color:var(--vio2);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #errbox{position:fixed;left:12px;right:12px;bottom:calc(var(--botH) + 8px);z-index:26;display:none;pointer-events:none;
+    background:rgba(60,10,30,.9);border:1px solid #F08A9B;border-radius:12px;padding:8px 10px;font-size:11px;color:#FFD9E1;
+    white-space:pre-wrap;max-height:34vh;overflow:auto}
+  #diag{position:fixed;right:8px;top:calc(var(--topH) + 6px);z-index:28;display:none;pointer-events:none;
+    background:rgba(8,2,20,.82);border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:10.5px;color:#CFE9FF;
+    white-space:pre;font-family:ui-monospace,Consolas,monospace;max-width:70vw}
+  /* 弹窗通用 */
+  .modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;display:none;width:min(92vw,380px);
+    background:linear-gradient(170deg,rgba(38,18,66,.99),rgba(16,7,36,.995));border:1px solid var(--line);border-radius:16px;padding:16px;
+    box-shadow:0 24px 70px rgba(0,0,0,.75),0 0 40px rgba(124,58,237,.32);max-height:86vh;overflow:auto}
+  .cfT{font-size:15px;font-weight:700;margin-bottom:8px}
+  .cfM{font-size:12.5px;color:var(--sub);line-height:1.7;white-space:pre-wrap}
+  #adjust{left:50%;top:auto;bottom:calc(var(--botH) + 14px);transform:translateX(-50%)}
+  .adjGrid{display:flex;flex-wrap:wrap;gap:8px}
+  .adjGrid>.btn{flex:0 0 calc(50% - 4px)}
+  /* 模型库抽屉（库 / 本地 两个来源） */
+  #picker{position:fixed;left:0;right:0;bottom:0;top:14vh;z-index:64;display:none;flex-direction:column;
+    background:linear-gradient(170deg,rgba(30,13,56,.995),rgba(12,5,28,.998));border-top:1px solid var(--line);
+    border-radius:18px 18px 0 0;box-shadow:0 -18px 60px rgba(0,0,0,.7)}
+  #picker.open{display:flex}
+  .pkHead{display:flex;align-items:center;gap:8px;padding:12px 14px 6px}
+  .pkHead b{flex:1;font-size:15px;background:linear-gradient(90deg,var(--cy),var(--vio2),var(--pink));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .pkTabs{display:flex;gap:8px;padding:6px 14px 8px}
+  .pkTab{flex:1 1 0;min-height:40px;border-radius:12px;border:1px solid var(--line);background:rgba(48,24,86,.5);
+    color:var(--txt);font-size:13px;cursor:pointer}
+  .pkTab.on{background:linear-gradient(135deg,var(--vio),var(--vio2));border-color:transparent;font-weight:600}
+  .pkBody{flex:1 1 auto;overflow:auto;padding:4px 14px 20px}
+  .pkItem{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.25);border:1px solid var(--line);
+    border-radius:12px;padding:9px 10px;margin:7px 0}
+  .pkName{flex:1 1 auto;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pkName small{display:block;color:var(--sub);font-size:10.5px}
+  .pkItem .btn{min-height:34px;padding:6px 10px;font-size:11.5px}
+  .pkHint{font-size:11px;color:var(--sub);line-height:1.6;margin:6px 2px}
+  /* 触发校准 */
+  #calibLayer{position:fixed;display:none;z-index:38;pointer-events:none}
+  .calBox{position:absolute;border:2px solid #FF3B5C;background:rgba(255,59,92,.14);border-radius:4px;pointer-events:auto;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),0 0 12px rgba(255,59,92,.45)}
+  .calBox>span{position:absolute;left:2px;top:-17px;font-size:10px;color:#FFD9E1;background:rgba(60,10,30,.85);
+    border:1px solid rgba(255,120,140,.5);border-radius:6px;padding:0 5px;white-space:nowrap}
+  .calBox.dim{opacity:.32}
+  .calBox.sel{border-color:#FFD166;background:rgba(255,209,102,.16);box-shadow:0 0 12px rgba(255,209,102,.55)}
+  #calibbar{left:50%;top:auto;bottom:calc(var(--botH) + 14px);transform:translateX(-50%);width:min(92vw,430px)}
+  /* 仓库浏览器 */
+  #explorer{width:min(94vw,560px);height:min(84vh,700px);display:none;flex-direction:column;padding:0;overflow:hidden}
+  #explorer.open{display:flex}
+  .exHead{padding:12px 14px 6px;border-bottom:1px solid var(--line)}
+  .exHead .cfT{display:flex;align-items:center;gap:8px}
+  .exHead .cfT span{flex:1}
+  .exRepo{display:flex;align-items:center;gap:6px;margin:8px 0 6px}
+  .exRepo input{flex:1 1 0;height:36px}
+  .exBody{flex:1 1 auto;overflow:auto;padding:8px 14px}
+  .exCrumb{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11.5px;color:var(--sub);margin-bottom:8px}
+  .exCrumb a{color:var(--cy);text-decoration:none;cursor:pointer}
+  .exItem{display:flex;align-items:center;gap:8px;padding:8px 8px;border-radius:10px;cursor:pointer;font-size:12.5px}
+  .exItem:hover,.exItem.sel{background:rgba(124,58,237,.22)}
+  .exItem .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .exItem .btn{min-height:32px;padding:5px 9px;font-size:11px}
+  .exPrev{border:1px solid var(--line);border-radius:10px;margin-top:8px;padding:8px}
+  .exPrev pre{max-height:30vh;overflow:auto;font-size:10.5px;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
+  .exPrev img{max-width:100%;border-radius:8px}
+  .exFoot{padding:6px 14px 12px;font-size:11px;color:var(--sub)}
+  #hint-modal .cfM{white-space:normal}
+  /* 右键菜单 */
+  #ctxmenu{position:fixed;z-index:90;display:none;min-width:180px;padding:6px;border-radius:12px;
+    background:linear-gradient(170deg,rgba(38,18,66,.99),rgba(16,7,36,.998));border:1px solid var(--line);
+    box-shadow:0 18px 50px rgba(0,0,0,.7)}
+  #ctxmenu.open{display:block}
+  .ctxItem{display:block;width:100%;text-align:left;border:none;background:none;color:var(--txt);
+    font-size:12.5px;padding:9px 10px;border-radius:8px;cursor:pointer}
+  .ctxItem:hover{background:rgba(124,58,237,.3)}
+  .ctxItem:disabled{opacity:.4}
+  .ctxDiv{height:1px;background:var(--line);margin:5px 4px}
+</style>
 </head>
-
 <body>
+<div id="stage"><img id="bgMedia" alt=""><video id="bgVideo" muted loop playsinline></video><canvas id="cv"></canvas></div>
 
-  <div class="app-wrap">
+<div id="topbar">
+  <button class="btn" id="menubtn">☰</button>
+  <div id="chips"></div>
+  <button class="btn" id="pickerbtn" title="模型库">📚</button>
+</div>
 
-    <header class="site-header">
-      <h1 id="title-btn" title="View Project News">Live2D Viewer</h1>
+<div id="empty"><b>Live2D 模型</b>点「📚」从模型库/本地载入，或点左上角 ☰ →「导入模型」</div>
+<div id="loading"><div class="spin"></div><div id="loadTxt" style="font-size:12px;color:var(--sub)">加载中…</div></div>
+<div id="tip"></div>
+<div id="mask"></div>
+<div id="errbox"></div>
+<div id="diag"></div>
 
-      <div class="model-imports">
+<div id="editbar">
+  <span id="editbarTxt">调整中…</span>
+  <button class="btn" id="btnEditCancel">✕ 取消</button>
+  <button class="btn pri" id="btnEditOk">✅ 确认固定</button>
+</div>
 
-        <!-- URL input + GitHub explorer -->
-        <div class="loader-group">
-          <button id="open-fe-btn" class="icon-btn" title="Open GitHub File Explorer"
-            aria-controls="fe-modal" aria-expanded="false">
-            <i class="fas fa-folder-open" aria-hidden="true"></i>
-          </button>
-          <input type="text" id="model-url-input" placeholder="Enter L2D model URL..."
-            title="Enter the URL of a Live2D model file">
-          <button id="load-url-btn" title="Load model from the specified URL">Load URL</button>
-        </div>
+<aside id="sidebar">
+  <div class="sbHead"><b>Live2D 模型</b><button class="btn" id="sbclose">✕</button></div>
 
-        <!-- Default models dropdown -->
-        <div class="loader-group">
-          <div class="model-dropdown" id="model-dropdown" tabindex="0"
-            aria-haspopup="listbox" aria-expanded="false" title="Select a default model to load">
-            <span class="dropdown-label" id="dropdown-label">Default Models</span>
-            <ul class="dropdown-list" id="dropdown-list" role="listbox" aria-label="List of default models">
-              <li class="dropdown-option" role="option"
-                data-value="https://raw.githubusercontent.com/guansss/pixi-live2d-display/refs/heads/master/test/assets/shizuku/shizuku.model.json">
-                Shizuku (Cubism 2.1)
-              </li>
-              <li class="dropdown-option" role="option"
-                data-value="https://raw.githubusercontent.com/guansss/pixi-live2d-display/refs/heads/master/test/assets/haru/haru_greeter_t03.model3.json">
-                Haru (Cubism 4)
-              </li>
-              <li class="dropdown-option" role="option"
-                data-value="https://raw.githubusercontent.com/Eikanya/Live2d-model/refs/heads/master/崩坏学园2/bronya/model.json">
-                Bronya (Cubism 2.1)
-              </li>
-              <li class="dropdown-option" id="upload-btn" role="button">Upload model (.zip)</li>
-            </ul>
-            <input type="file" id="zip-upload-input" accept=".zip" style="display:none" aria-hidden="true">
-            <input type="hidden" id="dropdown-value" value="">
-          </div>
-          <button id="load-selected-btn" title="Load the selected default model">Load Selected</button>
-        </div>
-
-      </div>
-    </header>
-
-    <main class="main-content">
-
-      <div class="canvas-area">
-        <canvas id="live2d-canvas" aria-label="Live2D Model Display Area"></canvas>
-
-        <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" hidden>
-          <div class="spinner" aria-hidden="true"></div>
-          <p class="loading-text">Loading model...</p>
-        </div>
-
-        <div id="empty-message" class="canvas-message">
-          <i class="fas fa-circle-user" aria-hidden="true"></i>
-          <p>Select or enter a model URL to display</p>
-        </div>
-
-        <div id="model-label" class="model-label" title="Click to copy filename"></div>
-      </div>
-
-      <aside class="control-panel" aria-labelledby="control-panel-heading">
-        <div class="control-row">
-          <input type="checkbox" id="hitareas-toggle" disabled>
-          <label for="hitareas-toggle" title="Toggle visibility of interactive hit areas on the model">
-            Show Hit Areas
-          </label>
-          <button id="delete-model-btn" title="Delete the currently selected model" disabled>
-            <i class="fas fa-trash" aria-hidden="true"></i>
-          </button>
-        </div>
-
-        <section class="panel-section">
-          <h3>Expressions</h3>
-          <div id="expressions-panel" class="feature-list" aria-live="polite">
-            <p class="empty-msg">No expressions available</p>
-          </div>
-        </section>
-
-        <section class="panel-section">
-          <h3>Motions</h3>
-          <div id="motions-panel" class="feature-list" aria-live="polite">
-            <p class="empty-msg">No motions available</p>
-          </div>
-        </section>
-
-        <section class="panel-section">
-          <h3>Hit Areas</h3>
-          <div id="hitareas-panel" class="feature-list" aria-live="polite">
-            <p class="empty-msg">No hit areas available</p>
-          </div>
-        </section>
-      </aside>
-
-    </main>
-
-    <footer class="site-footer">
-      <p>Powered by <a href="https://github.com/guansss/pixi-live2d-display" target="_blank"
-          rel="noopener noreferrer">pixi-live2d-display</a></p>
-      <p>Model controls: Drag to move, Scroll/Pinch to zoom, Tap to interact.</p>
-    </footer>
-
-    <!-- Changelog modal injected here by newsmodal.js -->
-    <div id="changelog-target"></div>
-
-    <!-- GitHub Repository Explorer Modal -->
-    <div id="fe-modal" class="explorer-modal" role="dialog" aria-modal="true"
-      aria-labelledby="explorer-heading">
-      <button id="fe-close-btn" class="modal-close-btn" title="Close File Explorer"
-        aria-label="Close File Explorer">
-        <i class="fas fa-xmark" aria-hidden="true"></i>
-      </button>
-
-      <div class="explorer-header">
-        <h2 id="explorer-heading">GitHub Repository Explorer</h2>
-        <div class="repo-inputs">
-          <input type="text" id="fe-owner-input" placeholder="GitHub Owner" value="Eikanya"
-            title="Enter GitHub username or organization">
-          <span>/</span>
-          <input type="text" id="fe-repo-input" placeholder="Repository Name" value="Live2d-model"
-            title="Enter GitHub repository name">
-          <button id="fe-load-repo-btn" title="Load repository content">Load Repository</button>
-        </div>
-      </div>
-
-      <div class="explorer-body">
-        <div class="explorer-nav">
-          <nav id="fe-breadcrumbs" class="breadcrumbs" aria-label="File path navigation"></nav>
-        </div>
-
-        <div class="explorer-content">
-          <div id="fe-file-listing-container" class="file-listing scrollable">
-            <p class="fe-placeholder-text">Load a repository to see its content.</p>
-          </div>
-          <div id="fe-file-preview-container" class="file-preview" hidden>
-            <div class="preview-header">
-              <h4 id="fe-preview-filename"></h4>
-              <button id="fe-close-preview-btn" class="icon-btn explorer-icon-btn"
-                title="Close file preview" aria-label="Close file preview">
-                <i class="fas fa-xmark" aria-hidden="true"></i>
-              </button>
-            </div>
-            <div id="fe-preview-content" class="preview-content scrollable"></div>
-            <div id="fe-preview-actions" class="preview-actions"></div>
-          </div>
-        </div>
-      </div>
-
-      <footer class="explorer-footer">
-        <p>Status: <span id="fe-status-message" aria-live="polite">Idle</span></p>
-      </footer>
-    </div>
-
-    <!-- Repo explorer loading overlay -->
-    <div id="fe-loader" class="loader-overlay" hidden role="status" aria-live="assertive" style="display:none">
-      <div class="spinner"></div>
-      <p>Loading Repository Data...</p>
-    </div>
-
+  <div class="grp">
+    <h3>模型</h3>
+    <div class="btns"><button class="btn pri" id="btnImport">📥 导入模型</button><button class="btn" id="btnPicker">📚 模型库</button></div>
+    <div class="btns"><button class="btn" id="btnBuiltin">加载内置 Mark</button><button class="btn" id="btnRemove">移除当前</button></div>
+    <div class="btns"><button class="btn" id="btnClearAll">全部移出</button><button class="btn" id="btnHelp">❓ 使用说明</button></div>
+    <div class="hint" id="loadedInfo">已加载：0 个模型</div>
   </div>
 
-  <!-- Console-filter must run before any libraries -->
-  <script src="js/exclusions.js"></script>
+  <div class="grp">
+    <h3>位置与缩放（防误触）</h3>
+    <div class="hint" id="lockState" style="margin:0 0 8px">🔒 已固定（防误触）</div>
+    <div class="btns"><button class="btn pri" id="btnAdjust">🛠 调整模型</button><button class="btn" id="btnLock">✅ 确认固定</button></div>
+    <div class="btns"><button class="btn" id="btnCalib">🎯 触发区校准</button></div>
+    <div class="row"><label>缩放</label><input type="range" id="rgScale" min="10" max="400" value="100" disabled><span class="val" id="vScale">100%</span></div>
+    <div class="row"><label>水平</label><input type="range" id="rgX" min="-400" max="400" value="0" disabled><span class="val" id="vX">0</span></div>
+    <div class="row"><label>垂直</label><input type="range" id="rgY" min="-400" max="400" value="0" disabled><span class="val" id="vY">0</span></div>
+    <div class="row"><label>旋转</label><input type="range" id="rgRot" min="0" max="180" value="90" disabled><span class="val" id="vRot">90°</span></div>
+    <div class="row"><label>透明度</label><input type="range" id="rgAlpha" min="10" max="100" value="100"><span class="val" id="vAlpha">100%</span></div>
+    <div class="hint">默认固定防误触。调整时点「🛠 调整模型」：全局调整（拖动/捏合/滑杆）或指定参数（水平、垂直、旋转、缩放、透明度、水平/垂直翻转）；调好点「✅ 确认固定」自动记住。锁定只固定模型本身，点击动作与滑动互动照常。</div>
+  </div>
 
-  <!-- Third-party libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js"></script>
-  <script src="libs/live2dcubismcore.js"></script>
-  <script src="libs/live2d.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="libs/extra.js"></script>
+  <div class="grp">
+    <h3>动作</h3>
+    <div class="featGrid" id="motionsPanel"><p class="featEmpty">暂无动作</p></div>
+  </div>
 
-  <!-- Application modules -->
-  <script type="module" src="js/app.js"></script>
-  <script type="module" src="js/repoexplorer.js"></script>
-  <script type="module" src="js/newsmodal.js"></script>
+  <div class="grp">
+    <h3>表情</h3>
+    <div class="featGrid" id="expressionsPanel"><p class="featEmpty">暂无表情</p></div>
+  </div>
 
+  <div class="grp">
+    <h3>触发区（点击模拟）</h3>
+    <div class="featGrid" id="hitareasPanel"><p class="featEmpty">暂无触发区</p></div>
+  </div>
+
+  <div class="grp">
+    <h3>背景与场景</h3>
+    <div class="row"><label>背景类型</label>
+      <select id="selBgType"><option value="color">纯色/渐变</option><option value="image">图片</option><option value="video">视频</option></select></div>
+    <div class="btns"><button class="btn" id="btnImportBg">选择背景文件</button><button class="btn" id="btnClearBg">清除背景</button></div>
+    <div class="row"><label>背景浓度</label><input type="range" id="rgBg" min="0" max="100" value="55"><span class="val" id="vBg">55%</span></div>
+    <div class="row"><label>背景模糊</label><input type="range" id="rgBlur" min="0" max="24" value="0"><span class="val" id="vBlur">0</span></div>
+    <div class="row"><label>背景播放</label><input type="checkbox" id="ckBgPlay" checked><span class="hint" style="margin:0">视频背景自动循环</span></div>
+    <div class="row" style="margin-top:12px"><label>快照名</label><input type="text" id="snapName" placeholder="例如：客厅 / 工作 / 夜晚"></div>
+    <div class="btns"><button class="btn pri" id="btnSaveSnap">保存当前场景</button><button class="btn" id="btnLoadSnap">读取场景</button></div>
+    <div class="btns"><button class="btn" id="btnDelSnap">删除场景</button></div>
+    <div class="row" style="margin-top:8px"><label>已有快照</label><select id="selSnap"></select></div>
+  </div>
+
+  <div class="grp">
+    <h3>交互与显示</h3>
+    <div class="row"><label>触发区红框</label><input type="checkbox" id="ckFrames"><span class="hint" style="margin:0">显示红色触发区框</span></div>
+    <div class="row"><label>点击提示</label><input type="checkbox" id="ckTapToast"><span class="hint" style="margin:0">弹出「动作：xxx」</span></div>
+    <div class="row"><label>诊断角标</label><input type="checkbox" id="ckDiag"><span class="hint" style="margin:0">FPS/循环/点击/错误</span></div>
+    <div class="row"><label>自动眨眼</label><input type="checkbox" id="ckEye" checked></div>
+    <div class="row"><label>呼吸</label><input type="checkbox" id="ckBreath" checked></div>
+    <div class="btns"><button class="btn" id="btnShot">📷 截图</button><button class="btn" id="btnFsIn">进入全屏</button></div>
+    <div class="btns"><button class="btn" id="btnFsOut">退出全屏</button><button class="btn" id="btnExit">← 返回上级</button></div>
+    <div class="hint">点击模型播动作（命中区→对应动作组，无命中区按上/中/下分区）；指针滑动时模型视线跟随；双击退出全屏。</div>
+  </div>
+</aside>
+
+<div id="picker">
+  <div class="pkHead"><b>📚 模型库</b><button class="btn" id="pkClose">✕</button></div>
+  <div class="pkTabs">
+    <button class="pkTab on" id="tabLib">在线库</button>
+    <button class="pkTab" id="tabLocal">本地模型</button>
+  </div>
+  <div class="pkBody" id="pkBody"></div>
+</div>
+
+<div class="modal" id="adjust">
+  <div class="cfT">🛠 调整模型</div>
+  <div id="adjMain">
+    <div class="btns"><button class="btn pri" id="adjGlobal">🖐 全局调整（拖动 / 捏合）</button></div>
+    <div class="btns"><button class="btn" id="adjParam">🎛 指定参数调整</button></div>
+    <div class="btns"><button class="btn" id="adjCalib">🎯 触发区校准</button></div>
+    <div class="hint">全局：拖动移动、捏合/滚轮缩放、侧栏滑杆全开。指定参数：只调一个属性。调好点「✅ 确认固定」锁定并记住。</div>
+  </div>
+  <div id="adjParams" style="display:none">
+    <div class="hint" style="margin:0 0 8px">选择要调整的属性（翻转类点一下立即生效）：</div>
+    <div class="adjGrid">
+      <button class="btn adjP" data-p="ox">↔ 水平位置</button>
+      <button class="btn adjP" data-p="oy">↕ 垂直位置</button>
+      <button class="btn adjP" data-p="rot">🔄 旋转</button>
+      <button class="btn adjP" data-p="scale">⤢ 缩放</button>
+      <button class="btn adjP" data-p="alpha">◐ 透明度</button>
+      <button class="btn adjP" data-p="flipH">⇋ 水平翻转</button>
+      <button class="btn adjP" data-p="flipV">⇵ 垂直翻转</button>
+    </div>
+  </div>
+  <div class="btns" style="margin-top:12px">
+    <button class="btn" id="adjBack" style="display:none">← 返回</button>
+    <button class="btn" id="adjCancel">✕ 取消</button>
+    <button class="btn pri" id="adjOk">✅ 确认固定</button>
+  </div>
+</div>
+
+<div class="modal" id="calibbar">
+  <div class="cfT">🎯 触发区校准</div>
+  <div class="row"><label>区域</label><select id="calSel"></select></div>
+  <div class="btns"><button class="btn" id="calRefresh">🔄 刷新框位</button><button class="btn" id="calReset">↺ 重置校准</button></div>
+  <div class="btns"><button class="btn" id="calExit">✕ 退出</button><button class="btn pri" id="calSave">✅ 保存并退出</button></div>
+  <div class="hint">红框 = 当前选中模型的触发区。拖动红框即可校正：选中单个区域拖它；选「全选」则所有区域一起移动。保存后点击判定按红框执行；点画面空处可测试命中的区域。</div>
+</div>
+
+<div class="modal" id="explorer">
+  <div class="exHead">
+    <div class="cfT"><span>🌐 在线模型库（GitHub 仓库浏览）</span><button class="btn" id="exClose">✕</button></div>
+    <div class="exRepo">
+      <input type="text" id="exOwner" placeholder="Owner（# 占位·待补充）">
+      <span>/</span>
+      <input type="text" id="exRepo2" placeholder="Repo（# 占位·待补充）">
+      <button class="btn" id="exLoad">载入仓库</button>
+    </div>
+  </div>
+  <div class="exBody">
+    <div class="exCrumb" id="exCrumb"></div>
+    <div id="exList"><p class="featEmpty">输入 Owner / Repo 后点「载入仓库」。</p></div>
+    <div id="exPreview"></div>
+  </div>
+  <div class="exFoot" id="exStatus">状态：空闲</div>
+</div>
+
+<div class="modal" id="confirm">
+  <div class="cfT" id="cfT">确认</div>
+  <div class="cfM" id="cfM"></div>
+  <div class="btns" style="margin-top:14px"><button class="btn" id="cfNo">取消</button><button class="btn pri" id="cfOk">确定</button></div>
+</div>
+
+<div class="modal" id="hint-modal">
+  <div class="cfT">❓ 使用说明</div>
+  <div class="cfM" style="white-space:normal">
+    <b>载入模型</b>：点「📥 导入模型」选 LPK / WPK / ZIP / model3.json（可多选）；或「📚 模型库」→ 本地模型快速载入；也可直接输入模型地址加载。<br><br>
+    <b>游玩互动</b>：点击模型播放动作（命中区优先）；手指在画面上滑动，模型视线跟随；拖动/捏合/滚轮在「调整模式」下可用。<br><br>
+    <b>防误触</b>：模型默认固定，不会误移误缩放。要调整点「🛠 调整模型」→ 全局或指定参数 → 「✅ 确认固定」记住位置。<br><br>
+    <b>触发区校准</b>：点「🎯 触发区校准」显示红色触发区框，可拖动校正单个/全部区域并保存；保存后点击判定按红框执行。<br><br>
+    <b>多模型</b>：可同时载入多个模型，点选切换；「移除当前」只移出画面，磁盘文件仍在。
+  </div>
+  <div class="btns" style="margin-top:14px"><button class="btn pri" id="hintOk">知道了</button></div>
+</div>
+
+<div id="calibLayer"></div>
+<div id="ctxmenu"></div>
+
+<script src="lib/pixi.min.js"></script>
+<script src="lib/live2dcubismcore.min.js"></script>
+<script src="lib/live2d.min.js"></script>
+<script src="lib/index.min.js"></script>
+<script>
+/* ============================================================================
+   巳泷资源库 · Live2D 模型页（融合版）
+   基座：开源 Live2D-Viewer（ImDuck42）—— 多模型舞台 / 点选拖动 / 捏合滚轮缩放 /
+        动作·表情·触发区按钮面板 / 在线仓库浏览 / 本地模型快速载入 / 截图 / 快捷键
+   本方独有并保留：防误触锁定 · 调整模型（全局/指定参数/翻转）· 触发区校准（红框可拖动）·
+        背景图片视频 · 场景快照 · 诊断角标 · 与安卓端 Java 桥接（导入/删除/导出/背景/全屏）
+   去重取舍：导入解包走 Java（LpkUnpacker，强于 JSZip）；点击动作走本页确定性方案
+        （命中区→动作组，无命中区按上/中/下分区，带音效），不采用随机动作；
+        触发区显示用本页可校准红框，不引入只读的 HitAreaFrames
+   界面：全中文 + 紫罗兰主题；外链全部改为 # 占位（共 5 个在线库位，待补充）
+   ============================================================================ */
+var app = null;
+var models = [];                    // [{ model, url, name, id }]  排在后面的在上层
+var selected = null;                // 当前选中的 model 实例
+var modelSeq = 0, loadSeq = 0;
+var info = { scale: 1, ox: 0, oy: 0, rot: 90, alpha: 1, flipH: false, flipV: false, url: '', name: '' };   // 选中模型的变换（随选择切换）
+var editMode = null;                // null=已固定 | 'global'=全局调整 | 'param'=指定参数
+var paramMode = null, paramSnap = null, adjustOpen = false;
+var calibOn = false, calibSel = '__all__', calibOff = {}, calibBase = {}, calibDrag = null;
+var framesOn = false;               // 触发区红框（只读显示）
+var dragTarget = null, dragStart = null, dragOrigin = null, dragMoved = 0;
+var stageDown = null, stageMoved = 0, pinchStart = 0, pinchScale = 1;
+var lastTapAt = 0, lastTapTriggerAt = 0, justSelected = false, tapCount = 0, lastHitNames = '（无）';
+var fullscreenMode = false, lastErr = '';
+var tapToastEnabled = false, diagOn = false, bgAlpha = 0.55;
+var soundVolume = 1, audioCache = {};
+var pickerTab = 'lib';              // 'lib' 在线库 | 'local' 本地
+/* 在线库位：全部 # 占位（后续补充 5 个文件后指向对应地址即可） */
+var LIB_SLOTS = [
+  { id: 1, name: '在线库位 1', note: '# 占位 · 待补充', url: '#' },
+  { id: 2, name: '在线库位 2', note: '# 占位 · 待补充', url: '#' },
+  { id: 3, name: '在线库位 3', note: '# 占位 · 待补充', url: '#' },
+  { id: 4, name: '在线库位 4', note: '# 占位 · 待补充', url: '#' },
+  { id: 5, name: '在线库位 5', note: '# 占位 · 待补充', url: '#' }
+];
+
+var $ = function (id) { return document.getElementById(id); };
+function safe(fn, dft) { try { if (window.L2DNative && fn) return fn(L2DNative); } catch (e) {} return dft; }
+function toast(msg) { try { var t = $('tip'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 2200); } catch (e) {} }
+function showErr(msg) { lastErr = String(msg || ''); try { var b = $('errbox'); b.textContent = '⚠ ' + lastErr; b.style.display = 'block'; setTimeout(function () { b.style.display = 'none'; }, 15000); } catch (e) {} try { if (window.L2DNative && L2DNative.logError) L2DNative.logError(lastErr); } catch (e) {} try { console.error(lastErr); } catch (e) {} diagPaint(); }
+function loading(on, txt) { try { $('loading').style.display = on ? 'block' : 'none'; if (txt) $('loadTxt').textContent = txt; else $('loadTxt').textContent = '加载中…'; } catch (e) {} }
+function logBoot(msg) { try { if (window.L2DNative && L2DNative.logBoot) L2DNative.logBoot(String(msg)); } catch (e) {} try { console.log('[L2D] ' + msg); } catch (e) {} }
+function currentVolume() { try { if (window.L2DNative && typeof L2DNative.getVolume === 'function') { var v = Number(L2DNative.getVolume()); if (!isNaN(v)) return Math.max(0, Math.min(1, v)); } } catch (e) {} return soundVolume; }
+function byId(id) { for (var i = 0; i < models.length; i++) if (models[i].id === id) return models[i]; return null; }
+function entryOf(m) { for (var i = 0; i < models.length; i++) if (models[i].model === m) return models[i]; return null; }
+
+/* ---------- 框架初始化（只做一次） ---------- */
+function initApp() {
+  if (app) return;
+  if (PIXI.live2d && PIXI.live2d.Live2DModel && PIXI.live2d.Live2DModel.registerTicker) {
+    try { PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker); } catch (e) {}
+  }
+  var cv = $('cv');
+  app = new PIXI.Application({ view: cv, autoStart: true, backgroundAlpha: 0, antialias: true,
+    resolution: Math.min(3, window.devicePixelRatio || 2), autoDensity: true });   // 清晰度：最高 3 倍原生分辨率
+  try { app.stage.eventMode = 'static'; app.stage.hitArea = app.screen; } catch (e) {}
+  try { app.ticker.start(); } catch (e) {}
+  /* 唯一一条更新循环：只驱动「已加载的模型列表」，异常全部兜底，绝不拖死渲染 */
+  try {
+    app.ticker.add(function () {
+      var dt = app.ticker.deltaMS;
+      for (var i = 0; i < models.length; i++) {
+        try { var m = models[i].model; if (m && m.update) m.update(dt); } catch (e) {}
+      }
+      try { if (selected && outline.visible) { drawOutline(selected); app.stage.setChildIndex(outline, app.stage.children.length - 1); } } catch (e) {}
+    });
+  } catch (e) {}
+  try { app.ticker.add(function () { fpsN++; }); } catch (e) {}
+  /* 选中描边（融合 Live2D-Viewer 的选中框，紫罗兰色） */
+  try { outline = new PIXI.Graphics(); outline.visible = false; app.stage.addChild(outline); } catch (e) {}
+  window.app = app;
+  bindStageGestures(cv);
+  layout();
+  window.addEventListener('resize', function () { layout(); });
+  setInterval(diagPaint, 500);
+  try { setInterval(function () { var _n = Date.now(), _d = Math.max(1, _n - fpsT); if (fpsN > 0) fps = Math.round(fpsN * 1000 / _d); fpsN = 0; fpsT = _n; }, 1000); } catch (e) {}
+}
+var outline = null;
+function drawOutline(m) {
+  try {
+    outline.clear();
+    var b = m.getBounds();
+    if (b.width > 1 && b.height > 1) {
+      outline.lineStyle({ width: 2, color: 0x8C5EFF, alpha: 0.85 });
+      outline.drawRoundedRect(b.x - 4, b.y - 4, b.width + 8, b.height + 8, 12);
+    }
+  } catch (e) {}
+}
+/* 画布尺寸严格等于可视区 */
+function layout() {
+  try {
+    var tbH = $('topbar').getBoundingClientRect().height;
+    document.documentElement.style.setProperty('--topH', (fullscreenMode ? 0 : (tbH + 6)) + 'px');
+    document.documentElement.style.setProperty('--botH', (fullscreenMode ? 0 : 12) + 'px');
+    var st = $('stage');
+    var W = Math.round(st.clientWidth), H = Math.round(st.clientHeight);
+    if (W > 0 && H > 0) app.renderer.resize(W, H);
+  } catch (e) {}
+  for (var i = 0; i < models.length; i++) fitEntry(models[i]);
+  fit();
+  try { if (calibOn) { freezeBases(); calibPaint(); } } catch (e) {}
+  try { assertCanvasClickable(); } catch (e) {}
+}
+/* 初始 = 屏幕内最大尺寸（不超出、不裁剪）；乘上每条模型的缩放/位置/翻转 */
+function fitEntry(entry) {
+  try {
+    var m = entry.model;
+    var b = m.getLocalBounds();
+    var bw = (b && b.width > 1) ? b.width : (m.internalModel.originalWidth || 600);
+    var bh = (b && b.height > 1) ? b.height : (m.internalModel.originalHeight || 600);
+    var W = app.screen.width, H = app.screen.height;
+    var base = Math.min(W / bw, H / bh);
+    entry.base = base;
+    m.anchor.set(0.5, 0.5);
+    var s = base * (entry.tf.scale || 1);
+    m.scale.set(entry.tf.flipH ? -s : s, entry.tf.flipV ? -s : s);
+    m.x = W / 2 + (entry.tf.ox || 0);
+    m.y = H / 2 + (entry.tf.oy || 0);
+    m.rotation = ((entry.tf.rot === undefined ? 90 : entry.tf.rot) - 90) * Math.PI / 180;
+    m.alpha = (entry.tf.alpha === undefined) ? 1 : entry.tf.alpha;
+  } catch (e) {}
+}
+/* 把当前 info（选中模型变换）写回它的 entry 并应用 */
+function applySelected() {
+  var e = entryOf(selected);
+  if (!e) return;
+  e.tf.scale = info.scale; e.tf.ox = info.ox; e.tf.oy = info.oy; e.tf.rot = info.rot;
+  e.tf.alpha = info.alpha; e.tf.flipH = info.flipH; e.tf.flipV = info.flipV;
+  fitEntry(e);
+}
+function fit() { applySelected(); }
+/* ---------- 变换记忆（按模型 URL 存 localStorage，「确认固定」时写入） ---------- */
+var TF_KEY = 'l2d_transform_v1';
+function tfStore() { try { return JSON.parse(localStorage.getItem(TF_KEY)) || {}; } catch (e) { return {}; } }
+function tfKey(url) { return url || 'default'; }
+function tfGet(url) {
+  var t = tfStore()[tfKey(url)] || {};
+  return {
+    scale: (+t.scale > 0) ? +t.scale : 1,
+    ox: isFinite(+t.ox) ? Math.round(+t.ox) : 0,
+    oy: isFinite(+t.oy) ? Math.round(+t.oy) : 0,
+    rot: (t.rot === undefined || t.rot === null) ? 90 : Math.round(+t.rot),
+    alpha: (isFinite(+t.alpha) && +t.alpha > 0) ? Math.min(1, +t.alpha) : 1,
+    flipH: !!t.flipH, flipV: !!t.flipV
+  };
+}
+function tfSave(url) {
+  try {
+    var s = tfStore();
+    s[tfKey(url)] = { scale: info.scale, ox: info.ox, oy: info.oy, rot: info.rot, alpha: info.alpha, flipH: info.flipH, flipV: info.flipV };
+    localStorage.setItem(TF_KEY, JSON.stringify(s));
+  } catch (e) {}
+}
+function syncInfoFromEntry(e) {
+  var t = e ? e.tf : tfGet('');
+  info.scale = (t.scale > 0) ? t.scale : 1;
+  info.ox = t.ox || 0; info.oy = t.oy || 0;
+  info.rot = (t.rot === undefined) ? 90 : t.rot;
+  info.alpha = (t.alpha === undefined) ? 1 : t.alpha;
+  info.flipH = !!t.flipH; info.flipV = !!t.flipV;
+  info.url = e ? e.url : ''; info.name = e ? e.name : '';
+}
+function updateLoadedInfo() {
+  try { $('loadedInfo').textContent = '已加载：' + models.length + ' 个模型' + (selected ? ('　当前：' + ((entryOf(selected) || {}).name || '')) : ''); } catch (e) {}
+}
+
+/* ---------- 地址归一：file:// 直加载原样透传 ---------- */
+function resolveUrl(u) {
+  if (!u) return u;
+  try {
+    if (/^[a-z]+:\/\//i.test(u)) {
+      var a = document.createElement('a'); a.href = u;
+      if (a.host !== location.host) return location.origin + a.pathname + a.search;
+      return u;
+    }
+  } catch (e) {}
+  return u;
+}
+
+/* ---------- 模型加载 / 选择 / 移除（融合多模型舞台 + 我方稳定性修复） ---------- */
+function loadModel(url, label) {
+  if (!app) initApp();
+  if (!url || url === '#') { toast('无效的模型地址'); return; }
+  var real = resolveUrl(url);
+  var exist = null;
+  for (var i = 0; i < models.length; i++) if (models[i].url === real) exist = models[i];
+  if (exist) { selectModel(exist.model, true); toast('该模型已在显示：' + (exist.name || '')); return; }
+  var seq = ++loadSeq;
+  loading(true, '正在加载：' + (label || real.split('/').slice(-1)[0]) + ' …');
+  lastErr = '';
+  PIXI.live2d.Live2DModel.from(real, { autoInteract: false, autoUpdate: false })   // 更新由唯一循环驱动
+    .then(function (m) {
+      if (seq !== loadSeq) { try { m.destroy(); } catch (e) {} return; }           // 过期加载直接丢弃
+      loading(false);
+      attachModel(m, label || real.split('/').slice(-1)[0], real);
+    })
+    .catch(function (e) {
+      if (seq !== loadSeq) return;
+      loading(false);
+      if (location.protocol === 'file:' && label && tryLoadByBase64(label, seq)) return;
+      var msg = (e && e.message) ? e.message : String(e);
+      showErr('模型加载失败：' + msg + '\n地址=' + real + (e && e.status ? ('\nHTTP ' + e.status) : ''));
+      refreshChips();
+    });
+}
+function attachModel(m, label, url) {
+  try {
+    m.anchor.set(0.5, 0.5);
+    m.eventMode = 'static';
+    m.cursor = 'grab';
+    var entry = { model: m, url: url || '', name: label || '', id: ++modelSeq, tf: tfGet(url) };
+    models.push(entry);
+    app.stage.addChild(m);
+    try { ensureIdle(m); } catch (e) {}
+    selectModel(m, true);
+    fitEntry(entry);
+    refreshChips(); updateLoadedInfo(); diagPaint();
+    logBoot('已加载：' + (label || '') + '（共 ' + models.length + ' 个模型）');
+    toast('已加载：' + (label || ''));
+  } catch (e) { showErr('加载后处理失败：' + e.message + '｜' + url); }
+  loading(false);
+}
+function selectModel(m, silent) {
+  var e = entryOf(m);
+  if (!e) return;
+  selected = m;
+  syncInfoFromEntry(e);
+  try { syncSliders(); updateLockUI(); refreshParamChips(); } catch (e2) {}
+  try { drawOutline(m); outline.visible = true; } catch (e2) {}
+  try { populatePanels(m); } catch (e2) {}
+  refreshChips(); updateLoadedInfo();
+  try {
+    if (calibOn) { calibOff = JSON.parse(JSON.stringify(calFor(e.url))); freezeBases(); calibPaint(); }
+    else if (framesOn) { freezeBases(); calibPaint(); }
+  } catch (e2) {}
+  if (!silent) toast('已选中：' + (e.name || ''));
+  diagPaint();
+}
+function removeModel(m, silent) {
+  var e = entryOf(m);
+  if (!e) return;
+  try { if (m.parent) m.parent.removeChild(m); } catch (e2) {}
+  models.splice(models.indexOf(e), 1);
+  var shared = false;
+  try {
+    shared = models.some(function (x) {
+      return x.model.textures && e.model.textures && x.model.textures.some(function (t) { return e.model.textures.indexOf(t) >= 0; });
+    });
+  } catch (e2) {}
+  try { e.model.destroy({ children: true, texture: !shared, baseTexture: !shared }); } catch (e2) {}
+  if (selected === m) {
+    selected = null; try { outline.visible = false; } catch (e2) {}
+    var last = models[models.length - 1];
+    if (last) selectModel(last.model, true);
+    else { syncInfoFromEntry(null); try { syncSliders(); updateLockUI(); populatePanels(null); } catch (e2) {} }
+  }
+  refreshChips(); updateLoadedInfo(); diagPaint();
+  if (!silent) toast('已移出：' + (e.name || ''));
+}
+function removeCurrent() { if (!selected) { toast('没有可移除的模型'); return; } removeModel(selected); }
+function clearAllModels() {
+  while (models.length) removeModel(models[models.length - 1].model, true);
+  refreshChips(); populatePanels(null); updateLoadedInfo(); diagPaint();
+  toast('已全部移出（磁盘文件仍在）');
+}
+function refreshChips() {
+  try {
+    var box = $('chips'); box.innerHTML = '';
+    models.forEach(function (e) {
+      var b = document.createElement('button');
+      b.className = 'btn chip' + (e.model === selected ? ' on' : '');
+      b.textContent = e.name || e.url;
+      b.onclick = function () { selectModel(e.model); };
+      box.appendChild(b);
+    });
+    $('empty').style.display = models.length ? 'none' : 'block';
+  } catch (e) {}
+}
+
+/* ---------- 本地模型（安卓私有目录，Java 桥接） ---------- */
+function listLocalModels() {
+  var arr = [];
+  var raw = safe(function (b) { return b.listModels(); }, '[]');
+  try { var j = JSON.parse(raw); if (j && j.length) arr = j; } catch (e) {}
+  return arr;
+}
+function deleteLocalModel(name) {
+  uiConfirm('删除模型', '确定删除「' + name + '」吗？\n会同时清理它的目录，删除后需要重新导入。', function () {
+    safe(function (b) { b.deleteModel(name); });
+    var toRemove = models.filter(function (x) { return x.name === name; });
+    toRemove.forEach(function (x) { removeModel(x.model, true); });
+    refreshChips(); renderPicker(); toast('已删除：' + name);
+  });
+}
+
+/* ---------- 模型库抽屉（在线库 / 本地 双来源） ---------- */
+function openPicker() { try { $('picker').classList.add('open'); $('mask').style.display = 'block'; renderPicker(); } catch (e) {} }
+function closePicker() { try { $('picker').classList.remove('open'); $('mask').style.display = 'none'; } catch (e) {} }
+function setPickerTab(t) {
+  pickerTab = t;
+  try { $('tabLib').classList.toggle('on', t === 'lib'); $('tabLocal').classList.toggle('on', t === 'local'); } catch (e) {}
+  renderPicker();
+}
+function renderPicker() {
+  try {
+    var body = $('pkBody'); body.innerHTML = '';
+    var hint = document.createElement('p'); hint.className = 'pkHint';
+    if (pickerTab === 'lib') {
+      hint.textContent = '在线库位共 5 个，当前均为「#」占位（待补充）。也可用下方「GitHub 仓库浏览」或直接输入模型地址载入。';
+      body.appendChild(hint);
+      LIB_SLOTS.forEach(function (slot) {
+        var item = document.createElement('div'); item.className = 'pkItem';
+        var nm = document.createElement('div'); nm.className = 'pkName';
+        nm.innerHTML = '';
+        nm.appendChild(document.createTextNode(slot.name));
+        var sm = document.createElement('small'); sm.textContent = slot.note; nm.appendChild(sm);
+        var btn = document.createElement('button'); btn.className = 'btn'; btn.textContent = '载入';
+        btn.onclick = function () { toast('「' + slot.name + '」为 # 占位，补充文件后可用（共 5 个库位）'); };
+        item.appendChild(nm); item.appendChild(btn); body.appendChild(item);
+      });
+      var rowUrl = document.createElement('div'); rowUrl.className = 'row';
+      var lab = document.createElement('label'); lab.textContent = '地址';
+      var inp = document.createElement('input'); inp.type = 'text'; inp.id = 'pkUrl'; inp.placeholder = '输入模型地址（model3.json / model.json）';
+      var go = document.createElement('button'); go.className = 'btn'; go.textContent = '载入';
+      go.onclick = function () {
+        var u = ($('pkUrl').value || '').trim();
+        if (!u || u === '#') { toast('请输入模型地址'); return; }
+        loadModel(u, ''); closePicker();
+      };
+      rowUrl.appendChild(lab); rowUrl.appendChild(inp); rowUrl.appendChild(go); body.appendChild(rowUrl);
+      var rowEx = document.createElement('div'); rowEx.className = 'btns';
+      var exBtn = document.createElement('button'); exBtn.className = 'btn pri'; exBtn.textContent = '🌐 GitHub 仓库浏览';
+      exBtn.onclick = function () { closePicker(); openExplorer(); };
+      rowEx.appendChild(exBtn); body.appendChild(rowEx);
+    } else {
+      hint.textContent = '这里是导入到本机的模型（LPK / WPK / ZIP / model3.json），点「载入」立即游玩；名称过多时用搜索快速定位。';
+      body.appendChild(hint);
+      var rowImp = document.createElement('div'); rowImp.className = 'btns';
+      var impBtn = document.createElement('button'); impBtn.className = 'btn pri'; impBtn.textContent = '📥 导入模型（可多选）';
+      impBtn.onclick = function () { safe(function (b) { b.importModel(); }); };
+      rowImp.appendChild(impBtn); body.appendChild(rowImp);
+      var rowSearch = document.createElement('div'); rowSearch.className = 'row';
+      var sLab = document.createElement('label'); sLab.textContent = '搜索';
+      var sInp = document.createElement('input'); sInp.type = 'text'; sInp.id = 'pkSearch'; sInp.placeholder = '按名称过滤…';
+      rowSearch.appendChild(sLab); rowSearch.appendChild(sInp); body.appendChild(rowSearch);
+      var listBox = document.createElement('div'); listBox.id = 'pkList'; body.appendChild(listBox);
+      var paint = function () {
+        var kwEl = $('pkSearch');
+        var kw = ((kwEl && kwEl.value) || '').trim().toLowerCase();
+        listBox.innerHTML = '';
+        var all = listLocalModels();
+        var arr = all.filter(function (m) { return !kw || String(m.name || '').toLowerCase().indexOf(kw) >= 0; });
+        if (!arr.length) {
+          var p = document.createElement('p'); p.className = 'featEmpty';
+          p.textContent = all.length ? '没有匹配的模型' : '还没有导入模型，点上方「📥 导入模型」';
+          listBox.appendChild(p); return;
+        }
+        arr.forEach(function (m) {
+          var item = document.createElement('div'); item.className = 'pkItem';
+          var nm = document.createElement('div'); nm.className = 'pkName'; nm.textContent = m.name || m.url;
+          var play = document.createElement('button'); play.className = 'btn pri'; play.textContent = '载入';
+          play.onclick = function () { loadModel(m.url, m.name); closePicker(); };
+          var del = document.createElement('button'); del.className = 'btn'; del.textContent = '删除';
+          del.onclick = function () { deleteLocalModel(m.name); };
+          var ex2 = document.createElement('button'); ex2.className = 'btn'; ex2.textContent = '导出ZIP';
+          ex2.onclick = function () { safe(function (b) { b.exportZip(m.name); }); };
+          item.appendChild(nm); item.appendChild(play); item.appendChild(del); item.appendChild(ex2);
+          listBox.appendChild(item);
+        });
+      };
+      sInp.oninput = paint;
+      paint();
+    }
+  } catch (e) { showErr('模型库面板渲染失败：' + e.message); }
+}
+
+/* ---------- 动作 / 表情 / 触发区 按钮面板（融合 Live2D-Viewer 面板 + 我方音效与确定性触发） ---------- */
+function motionGroups(m) {
+  try {
+    var mm = m && m.internalModel && m.internalModel.motionManager;
+    if (!mm || !mm.definitions) return [];
+    return Object.keys(mm.definitions).filter(function (k) { return (mm.definitions[k] || []).length > 0; });
+  } catch (e) { return []; }
+}
+function emptyPlaceholder(box, t) { var p = document.createElement('p'); p.className = 'featEmpty'; p.textContent = t; box.appendChild(p); }
+function populatePanels(m) {
+  try {
+    var mp = $('motionsPanel'), ep = $('expressionsPanel'), hp = $('hitareasPanel');
+    mp.innerHTML = ''; ep.innerHTML = ''; hp.innerHTML = '';
+    if (!m) { emptyPlaceholder(mp, '暂无动作'); emptyPlaceholder(ep, '暂无表情'); emptyPlaceholder(hp, '暂无触发区'); return; }
+    var total = 0;
+    try {
+      var defs = (m.internalModel && m.internalModel.motionManager && m.internalModel.motionManager.definitions) || {};
+      Object.keys(defs).forEach(function (g) {
+        (defs[g] || []).forEach(function (d, i) {
+          total++;
+          var b = document.createElement('button');
+          b.className = 'featBtn';
+          b.textContent = g + ((defs[g].length > 1) ? (' #' + (i + 1)) : '');
+          b.onclick = function () { playMotionBtn(m, g, i, b); };
+          mp.appendChild(b);
+        });
+      });
+    } catch (e) {}
+    if (!total) emptyPlaceholder(mp, '暂无动作');
+    var exps = [];
+    try {
+      var raw = (m.internalModel && (m.internalModel.expressions || (m.internalModel.settings && m.internalModel.settings.expressions))) || [];
+      exps = Array.isArray(raw) ? raw : [];
+    } catch (e) { exps = []; }
+    if (exps.length) {
+      exps.forEach(function (x, i) {
+        var nm = (x && (x.Name || x.name)) || ('表情 ' + (i + 1));
+        var b = document.createElement('button'); b.className = 'featBtn'; b.textContent = nm;
+        b.onclick = function () {
+          try {
+            m.expression(i);
+            b.classList.add('hl'); setTimeout(function () { b.classList.remove('hl'); }, 500);
+            toast('已切换表情：' + nm);
+          } catch (e) { toast('切换失败'); }
+        };
+        ep.appendChild(b);
+      });
+    } else emptyPlaceholder(ep, '暂无表情');
+    var areas = [];
+    try {
+      var s = m.internalModel && m.internalModel.settings;
+      var ha = s && (s.hitAreas || s.hit_areas || []);
+      areas = (ha || []).map(function (a) { return a && (a.Name || a.name || a.Id); }).filter(Boolean);
+    } catch (e) { areas = []; }
+    if (!areas.length) { try { areas = Object.keys((m.internalModel && m.internalModel.hitAreas) || {}); } catch (e) { areas = []; } }
+    if (areas.length) {
+      areas.forEach(function (nm2) {
+        var b = document.createElement('button'); b.className = 'featBtn'; b.textContent = nm2;
+        b.onclick = function () {
+          playAction(undefined, undefined, [nm2]);
+          b.classList.add('hl'); setTimeout(function () { b.classList.remove('hl'); }, 500);
+        };
+        hp.appendChild(b);
+      });
+    } else emptyPlaceholder(hp, '暂无触发区（点击按上/中/下分区）');
+  } catch (e) {}
+}
+function playMotionBtn(m, g, i, btn) {
+  try {
+    var mm = m.internalModel && m.internalModel.motionManager;
+    if (mm && mm.stopAllMotions) { try { mm.stopAllMotions(); } catch (e) {} }
+    setTimeout(function () { try { m.motion(g, i); } catch (e) {} }, 0);
+    playSound(m, g, i);
+    if (btn) { btn.classList.add('hl'); setTimeout(function () { btn.classList.remove('hl'); }, 500); }
+    if (tapToastEnabled) toast('播放动作：' + g + (i !== undefined ? (' #' + (i + 1)) : ''));
+    diagPaint();
+  } catch (e) { toast('播放失败'); }
+}
+/* ---------- 音效：动作自带的 Sound（失败静默） ---------- */
+function soundBase(url) { var i = String(url || '').lastIndexOf('/'); return i >= 0 ? url.substring(0, i + 1) : ''; }
+function playSound(m, group, idx) {
+  try {
+    var e = entryOf(m); if (!e) return;
+    var mm = m.internalModel && m.internalModel.motionManager;
+    var arr = (mm && mm.definitions && mm.definitions[group]) || [];
+    var d = arr[idx || 0]; var snd = d && (d.Sound || d.sound);
+    if (!snd) return;
+    var url = /^[a-z]+:\/\//i.test(snd) ? snd : (soundBase(e.url) + snd);
+    var a = audioCache[url] || (audioCache[url] = new Audio(url));
+    a.volume = currentVolume();
+    try { a.currentTime = 0; } catch (e3) {}
+    var p = a.play(); if (p && p.catch) p.catch(function () {});
+  } catch (e) {}
+}
+/* 待机动作兜底：没有 Idle 组时把第一个组当待机 */
+function ensureIdle(m) {
+  try {
+    var keys = motionGroups(m);
+    var mm = m.internalModel.motionManager;
+    if (keys.length && keys.indexOf('Idle') < 0) { mm.definitions['Idle'] = mm.definitions[keys[0]]; }
+    var g = (motionGroups(m).indexOf('Idle') >= 0) ? 'Idle' : motionGroups(m)[0];
+    if (g) m.motion(g);
+  } catch (e) {}
+}
+/* ---------- 兜底：file:// 直读失败时用原生 base64 回传，再用 File[] 加载 ---------- */
+function b64ToBytes(b64) { var bin = atob(b64), n = bin.length, u = new Uint8Array(n); for (var i = 0; i < n; i++) u[i] = bin.charCodeAt(i); return u; }
+function tryLoadByBase64(name, seq) {
+  try {
+    var raw = safe(function (b) { return b.loadLocalModel ? b.loadLocalModel(name) : ''; }, '');
+    if (!raw) return false;
+    var j = JSON.parse(raw);
+    if (!j || !j.ok || !j.files || !j.files.length) return false;
+    var out = [];
+    for (var i = 0; i < j.files.length; i++) {
+      var it = j.files[i];
+      if (!it || !it.data) continue;
+      var path = String(it.path || it.name || ('f' + i));
+      var f = new File([b64ToBytes(it.data)], path.split('/').pop());
+      try { Object.defineProperty(f, 'webkitRelativePath', { value: path, configurable: true }); } catch (e) {}
+      out.push(f);
+    }
+    if (!out.length) return false;
+    logBoot('file:// 直读失败 → base64 兜底加载：' + name + '（' + out.length + ' 个文件）');
+    PIXI.live2d.Live2DModel.from(out, { autoInteract: false, autoUpdate: false })
+      .then(function (m) {
+        if (seq !== loadSeq) { try { m.destroy(); } catch (e) {} return; }
+        attachModel(m, name, 'file:' + name);
+      })
+      .catch(function (e2) {
+        showErr('模型加载失败（base64 兜底）：' + ((e2 && e2.message) ? e2.message : e2) + '｜' + name);
+      });
+    return true;
+  } catch (e) { return false; }
+}
+window.L2DLoadFiles = function (list, label) {          // 供本地测试台复用
+  try {
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (it instanceof File) out.push(it);
+      else if (it && it.data) {
+        var path = String(it.path || it.name || ('f' + i));
+        var f = new File([b64ToBytes(it.data)], path.split('/').pop());
+        try { Object.defineProperty(f, 'webkitRelativePath', { value: path, configurable: true }); } catch (e) {}
+        out.push(f);
+      }
+    }
+    if (!out.length) return false;
+    var seq = ++loadSeq;
+    PIXI.live2d.Live2DModel.from(out, { autoInteract: false, autoUpdate: false }).then(function (m) {
+      if (seq !== loadSeq) { try { m.destroy(); } catch (e) {} return; }
+      attachModel(m, label || '模型', 'file:' + (label || '模型'));
+    });
+    return true;
+  } catch (e) { return false; }
+};
+/* ---------- 动作组匹配：命中区名 → 动作组；无匹配按上/中/下分区（确定性，绝不随机） ---------- */
+function pickGroup(m, areas) {
+  var keys = motionGroups(m);
+  if (!keys.length) return null;
+  var low = keys.map(function (k) { return String(k).toLowerCase(); });
+  for (var i = 0; i < (areas || []).length; i++) {
+    var a = String(areas[i] || '').toLowerCase(); if (!a) continue;
+    for (var j = 0; j < low.length; j++) if (low[j] === a || low[j].indexOf(a) >= 0 || a.indexOf(low[j]) >= 0) return keys[j];
+  }
+  var t = ['tap', 'touch', 'click'];
+  for (var w = 0; w < t.length; w++) for (var k = 0; k < low.length; k++) if (low[k].indexOf(t[w]) >= 0) return keys[k];
+  return null;
+}
+function zoneOf(m, py) {
+  try {
+    var b = m.getBounds(), top = b.y, h = b.height;
+    if (!(h > 4)) { h = (m.internalModel.originalHeight || 600) * Math.abs(m.scale.y || 1); top = m.y - h / 2; }
+    var r = (py - top) / h;
+    return r < 1 / 3 ? 0 : (r < 2 / 3 ? 1 : 2);
+  } catch (e) { return 0; }
+}
+var ZN = ['上段', '中段', '下段'];
+function playAction(px, py, areas) {
+  try {
+    var m = selected; if (!m) return;
+    var keys = motionGroups(m); if (!keys.length) return;
+    var g = areas && areas.length ? pickGroup(m, areas) : null, why = g ? ('命中区 ' + areas.join('/')) : '';
+    if (!g && px !== undefined) { var z = zoneOf(m, py); g = keys[z % keys.length]; why = ZN[z]; }
+    if (!g) { g = keys[0]; why = '默认'; }
+    m.motion(g);
+    playSound(m, g, 0);
+    if (tapToastEnabled) toast('动作：' + g + '（' + why + '）');
+    diagPaint();
+  } catch (e) { showErr('播放动作失败：' + e.message); }
+}
+function triggerTap(px, py, areas) {
+  var now = Date.now();
+  if (now - lastTapTriggerAt < 260) return;     // click / pointerup / touchend 去重
+  lastTapTriggerAt = now;
+  playAction(px, py, areas);
+}
+/* ---------- 点击判定 ---------- */
+function geomOk(ev) {
+  try {
+    if (!stageDown || !ev) return true;
+    if (Date.now() - stageDown.t > 1500) return true;
+    if (dragMoved > 8) return false;                                  // 调整模式下真的拖过 → 不算点击
+    var dx = (ev.clientX || 0) - stageDown.x, dy = (ev.clientY || 0) - stageDown.y;
+    if (Math.sqrt(dx * dx + dy * dy) > window.innerWidth * 0.2) return false;
+    if (Date.now() - stageDown.t > 800) return false;
+  } catch (e) {}
+  return true;
+}
+/* 多模型：取点击位置最上层的模型（数组后面的在上层） */
+function topModelAt(px, py) {
+  for (var i = models.length - 1; i >= 0; i--) {
+    try {
+      var b = models[i].model.getBounds();
+      if (b && px >= b.x && px <= b.x + b.width && py >= b.y && py <= b.y + b.height) return models[i];
+    } catch (e) {}
+  }
+  return null;
+}
+/* 轻触统一入口：先“点谁选谁”，再命中区→动作组 / 无命中按上中下分区 */
+function stageTap(ev, px, py) {
+  try {
+    if (!ev || !geomOk(ev)) return;
+    if (calibOn) {                                            // 校准模式：只测试命中的区域
+      var ct = calibratedAreas(px, py);
+      if (ct === null) { try { ct = (selected && selected.hitTest) ? (selected.hitTest(px, py) || []) : []; } catch (e2) { ct = []; } }
+      lastHitNames = ct.length ? ct.join('/') : '（无）';
+      toast('命中触发区：' + (ct.length ? ct.join('、') : '无（点空）'));
+      diagPaint();
+      return;
+    }
+    var now = Date.now(), dbl = (now - lastTapAt) < 320;
+    if (dbl && fullscreenMode) { lastTapAt = 0; setFullscreen(false); return; }
+    if (!dbl) lastTapAt = now;
+    var hitE = topModelAt(px, py);
+    if (hitE && hitE.model !== selected) {                    // 融合 Live2D-Viewer：点击切换选中模型
+      selectModel(hitE.model, true);
+      tapCount++; lastHitNames = '（选中模型）'; diagPaint();
+      return;                                                 // 选中的这一下不误触动作
+    }
+    if (!selected) return;
+    tapCount++;
+    var areas = calibratedAreas(px, py);                      // 校准过的模型：按红框判定
+    if (areas === null) { try { areas = selected.hitTest ? (selected.hitTest(px, py) || []) : []; } catch (e) { areas = []; } }
+    lastHitNames = areas.length ? areas.join('/') : '（无）';
+    try { if (selected.focus) selected.focus(px, py); } catch (e) {}
+    triggerTap(px, py, areas);
+  } catch (e) {}
+}
+
+/* ---------- 画布手势：滑动互动（始终可用）/ 拖动·捏合·滚轮（仅调整模式） ---------- */
+function bindStageGestures(cv) {
+  cv.addEventListener('pointerdown', function (e) {
+    stageDown = { x: e.clientX || 0, y: e.clientY || 0, t: Date.now() };
+    stageMoved = 0; dragMoved = 0;
+    if (!selected || !app) return;
+    if (editMode === 'global') {
+      dragTarget = selected;
+      dragStart = { x: e.clientX || 0, y: e.clientY || 0 };
+      dragOrigin = { x: selected.x, y: selected.y };
+    } else if (editMode === 'param' && paramMode) {
+      dragTarget = selected;
+      dragStart = { x: e.clientX || 0, y: e.clientY || 0 };
+      paramSnap = { ox: info.ox, oy: info.oy, rot: info.rot, scale: info.scale, alpha: info.alpha };
+    }
+  });
+  cv.addEventListener('pointermove', function (e) {
+    var cx = e.clientX || 0, cy = e.clientY || 0;
+    if (stageDown) { var mx = cx - stageDown.x, my = cy - stageDown.y; stageMoved = Math.max(stageMoved, Math.sqrt(mx * mx + my * my)); }
+    /* ★ 指针跟随注视：任何模式（含已固定）都生效 —— 锁定只固定模型本身，不锁滑动互动 */
+    try {
+      if (selected && !dragTarget && selected.focus) {
+        var r = cv.getBoundingClientRect();
+        selected.focus(cx - r.left, cy - r.top, false);
+      }
+    } catch (err) {}
+    if (!dragTarget || !selected || dragTarget !== selected) return;
+    var dx = cx - dragStart.x, dy = cy - dragStart.y;
+    dragMoved = Math.max(dragMoved, Math.sqrt(dx * dx + dy * dy));
+    if (editMode === 'global') {
+      selected.x = dragOrigin.x + dx;
+      selected.y = dragOrigin.y + dy;
+      info.ox = Math.round(selected.x - app.screen.width / 2);
+      info.oy = Math.round(selected.y - app.screen.height / 2);
+    } else if (editMode === 'param' && paramSnap) {
+      var P = paramSnap;
+      if (paramMode === 'ox') info.ox = Math.round(P.ox + dx);
+      else if (paramMode === 'oy') info.oy = Math.round(P.oy + dy);
+      else if (paramMode === 'rot') info.rot = Math.max(0, Math.min(180, Math.round(P.rot + dx * 0.5)));
+      else if (paramMode === 'scale') info.scale = Math.max(0.1, Math.min(4, P.scale * (1 - dy / 320)));
+      else if (paramMode === 'alpha') info.alpha = Math.max(0.1, Math.min(1, P.alpha - dy / 320));
+      fit();
+    } else { dragTarget = null; return; }
+    syncSliders();
+  });
+  var endDrag = function () { dragTarget = null; };
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+  cv.addEventListener('click', function (e) {              // 主路径：浏览器原生 click
+    var r = cv.getBoundingClientRect();
+    stageTap(e, (e.clientX || 0) - r.left, (e.clientY || 0) - r.top);
+  }, true);
+  cv.addEventListener('pointerup', function (e) {          // 兜底
+    var r = cv.getBoundingClientRect();
+    stageTap(e, (e.clientX || 0) - r.left, (e.clientY || 0) - r.top);
+    endDrag();
+  });
+  cv.addEventListener('touchend', function (e) {           // Android WebView 兜底
+    try {
+      var t0 = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
+      if (!t0 || (e.touches && e.touches.length > 0)) return;
+      var r = cv.getBoundingClientRect();
+      stageTap({ clientX: t0.clientX, clientY: t0.clientY }, (t0.clientX || 0) - r.left, (t0.clientY || 0) - r.top);
+    } catch (err) {}
+  }, { passive: true });
+  /* 滚轮缩放（融合 Live2D-Viewer：以光标为中心，不漂移）——仅调整模式可用 */
+  cv.addEventListener('wheel', function (e) {
+    if (!(editMode === 'global' || (editMode === 'param' && paramMode === 'scale')) || !selected) return;
+    e.preventDefault();
+    try {
+      var factor = Math.exp((e.deltaY < 0 ? 1 : -1) * 0.075);
+      var ns = Math.max(0.1, Math.min(4, info.scale * factor));
+      var r = cv.getBoundingClientRect();
+      var px = (e.clientX || 0) - r.left, py = (e.clientY || 0) - r.top;
+      var f = ns / info.scale;
+      var cx0 = app.screen.width / 2 + info.ox, cy0 = app.screen.height / 2 + info.oy;
+      info.ox = Math.round(info.ox + (px - cx0) * (1 - f));   // 光标下的模型点保持不动
+      info.oy = Math.round(info.oy + (py - cy0) * (1 - f));
+      info.scale = ns;
+      syncSliders(); fit();
+    } catch (e2) {}
+  }, { passive: false });
+  cv.addEventListener('touchstart', function (e) {         // 双指捏合（仅调整模式）
+    if (e.touches.length === 2 && selected && (editMode === 'global' || (editMode === 'param' && paramMode === 'scale'))) {
+      pinchStart = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      pinchScale = info.scale;
+    } else pinchStart = 0;
+  }, { passive: true });
+  cv.addEventListener('touchmove', function (e) {
+    if (e.touches.length === 2 && pinchStart > 0 && selected && (editMode === 'global' || (editMode === 'param' && paramMode === 'scale'))) {
+      e.preventDefault();
+      var d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      info.scale = Math.max(0.1, Math.min(4, pinchScale * (d / pinchStart)));
+      syncSliders(); fit();
+    }
+  }, { passive: false });
+  cv.addEventListener('touchend', function () { pinchStart = 0; }, { passive: true });
+}
+/* ---------- 防误触锁定：调整模型（全局 / 指定参数）/ 确认固定 / 取消 ---------- */
+var PARAM_LABEL = { ox: '水平', oy: '垂直', rot: '旋转', scale: '缩放', alpha: '透明度' };
+function updateLockUI() {
+  try {
+    var g = (editMode === 'global'), p = (editMode === 'param');
+    $('btnAdjust').classList.toggle('on', !!editMode);
+    $('rgScale').disabled = !(g || (p && paramMode === 'scale'));
+    $('rgX').disabled = !(g || (p && paramMode === 'ox'));
+    $('rgY').disabled = !(g || (p && paramMode === 'oy'));
+    $('rgRot').disabled = !(g || (p && paramMode === 'rot'));
+    $('editbar').classList.toggle('show', !!editMode && !adjustOpen && !calibOn);
+    $('editbarTxt').textContent = g ? '🖐 全局调整：拖动移动 · 捏合/滚轮缩放'
+      : (p ? ('🎛 调整「' + (PARAM_LABEL[paramMode] || '-') + '」：画面上滑动或用侧栏滑杆') : '调整中…');
+    $('lockState').textContent = !editMode ? '🔒 已固定（防误触）'
+      : (g ? '🖐 全局调整中…调好点「确认固定」' : ('🎛 指定参数：' + (PARAM_LABEL[paramMode] || '-')));
+  } catch (e) {}
+}
+function openAdjust() {
+  if (!selected) { toast('还没有模型，先从模型库载入或导入一个'); return; }
+  adjustOpen = true;
+  try {
+    $('adjust').style.display = 'block';
+    $('adjMain').style.display = 'block';
+    $('adjParams').style.display = 'none';
+    $('adjBack').style.display = 'none';
+  } catch (e) {}
+  updateLockUI();
+}
+function closeAdjust() {
+  adjustOpen = false;
+  try { $('adjust').style.display = 'none'; } catch (e) {}
+  updateLockUI();
+}
+function refreshParamChips() {
+  try {
+    var chips = document.querySelectorAll('.adjP');
+    for (var i = 0; i < chips.length; i++) {
+      var p = chips[i].getAttribute('data-p');
+      var on = (p === 'flipH') ? info.flipH : (p === 'flipV') ? info.flipV : (editMode === 'param' && paramMode === p);
+      chips[i].classList.toggle('on', !!on);
+    }
+  } catch (e) {}
+}
+function showAdjParams() {
+  try {
+    $('adjMain').style.display = 'none';
+    $('adjParams').style.display = 'block';
+    $('adjBack').style.display = 'inline-flex';
+    refreshParamChips();
+  } catch (e) {}
+}
+function setEditMode(mode, param) {
+  if (mode && !selected) { toast('还没有模型'); return; }
+  editMode = mode || null;
+  paramMode = (mode === 'param') ? (param || paramMode || 'ox') : null;
+  updateLockUI();
+  if (mode === 'global') {
+    try { closePanel(); } catch (e) {}
+    toast('全局调整：拖动移动 · 捏合/滚轮缩放 · 侧栏滑杆全开，调好点「✅ 确认固定」');
+  } else if (mode === 'param') {
+    toast('指定参数：' + (PARAM_LABEL[paramMode] || '') + ' —— 在画面上滑动微调，或用侧栏对应滑杆');
+  } else { toast('已重新固定'); }
+}
+function pickParam(p) {
+  if (!selected) { toast('还没有模型'); return; }
+  if (p === 'flipH' || p === 'flipV') {
+    if (p === 'flipH') info.flipH = !info.flipH; else info.flipV = !info.flipV;
+    if (!editMode) editMode = 'param';
+    paramMode = null;
+    fit(); refreshParamChips(); updateLockUI();
+    toast((p === 'flipH' ? '水平翻转：' : '垂直翻转：') + ((p === 'flipH' ? info.flipH : info.flipV) ? '已开启' : '已关闭') + '（点「确认固定」保存）');
+    return;
+  }
+  editMode = 'param'; paramMode = p;
+  refreshParamChips(); updateLockUI();
+  toast('已选「' + (PARAM_LABEL[p] || p) + '」：在画面上左右/上下滑动微调');
+}
+function confirmLock() {
+  if (editMode) {
+    tfSave(info.url); editMode = null; paramMode = null;
+    closeAdjust(); refreshParamChips(); updateLockUI();
+    toast('已固定并记住（下次加载仍生效）');
+  } else { closeAdjust(); toast('当前已是固定状态（防误触）'); }
+}
+function cancelEdit() {
+  if (editMode) {
+    try {
+      var e = entryOf(selected);
+      if (e) { e.tf = tfGet(e.url); fitEntry(e); syncInfoFromEntry(e); }
+    } catch (e2) {}
+    editMode = null; paramMode = null; syncSliders();
+  }
+  closeAdjust(); refreshParamChips(); updateLockUI();
+  toast('已还原并固定');
+}
+
+/* ---------- 触发区校准 + 红框显示（对「当前选中模型」生效） ---------- */
+var CAL_KEY = 'l2d_hit_calib_v1';
+function calStore() { try { return JSON.parse(localStorage.getItem(CAL_KEY)) || {}; } catch (e) { return {}; } }
+function calFor(url) { try { return calStore()[url] || {}; } catch (e) { return {}; } }
+function calSave(url, off) { try { var s = calStore(); s[url] = off || {}; localStorage.setItem(CAL_KEY, JSON.stringify(s)); } catch (e) {} }
+function hitAreaNames() {
+  try { return (selected && selected.internalModel && selected.internalModel.hitAreas) ? Object.keys(selected.internalModel.hitAreas) : []; } catch (e) { return []; }
+}
+/* 触发区矩形（画面坐标）。基准矩形冻结用于拖动/显示，偏移存模型本地坐标（跟随缩放/翻转） */
+function hitAreaRect(name, off, frozen) {
+  try {
+    if (!selected) return null;
+    var r = (frozen && calibBase[name]) ? calibBase[name] : null;
+    if (!r) {
+      var ha = selected.internalModel.hitAreas[name];
+      var b = null;
+      try { b = (ha && ha.getBounds) ? ha.getBounds() : null; } catch (e1) { b = null; }
+      if (!b || !(b.width > 0.5 && b.height > 0.5)) return null;
+      var p1 = selected.toGlobal(new PIXI.Point(b.x, b.y));
+      var p2 = selected.toGlobal(new PIXI.Point(b.x + b.width, b.y + b.height));
+      r = { x: Math.min(p1.x, p2.x), y: Math.min(p1.y, p2.y), w: Math.abs(p2.x - p1.x), h: Math.abs(p2.y - p1.y) };
+      if (!(r.w > 1 && r.h > 1)) return null;
+      if (frozen) calibBase[name] = r;
+    }
+    var o = off || { dx: 0, dy: 0 };
+    var kx = selected.scale.x || 1, ky = selected.scale.y || 1;
+    return { x: r.x + (o.dx || 0) * kx, y: r.y + (o.dy || 0) * ky, w: r.w, h: r.h };
+  } catch (e) { return null; }
+}
+/* 命中判定：该模型校准过 → 用红框接管；没校准过 → 返回 null 交给库自带的 hitTest */
+function calibratedAreas(px, py) {
+  try {
+    var e = entryOf(selected);
+    var off = calFor(e ? e.url : '');
+    if (!Object.keys(off).length) return null;
+    var names = hitAreaNames(), out = [];
+    for (var i = 0; i < names.length; i++) {
+      var r = hitAreaRect(names[i], off[names[i]], false);
+      if (r && px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) out.push(names[i]);
+    }
+    return out;
+  } catch (e2) { return null; }
+}
+function freezeBases() { calibBase = {}; var names = hitAreaNames(); for (var i = 0; i < names.length; i++) hitAreaRect(names[i], null, true); }
+function calibPaint() {
+  try {
+    var layer = $('calibLayer');
+    var names = hitAreaNames();
+    var boxes = layer.querySelectorAll('.calBox');
+    var map = {};
+    for (var b = 0; b < boxes.length; b++) map[boxes[b].getAttribute('data-area')] = boxes[b];
+    var keep = {};
+    for (var i = 0; i < names.length; i++) {
+      var name = names[i];
+      var r = hitAreaRect(name, calibOff[name], true);
+      if (!r || r.w < 2 || r.h < 2) continue;
+      var d = map[name];
+      if (!d) {                                   // 原地复用，拖动中不重建 DOM
+        d = document.createElement('div');
+        d.setAttribute('data-area', name);
+        d.innerHTML = '<span></span>';
+        layer.appendChild(d);
+      }
+      var sp = d.firstChild;
+      if (sp && sp.textContent !== name) sp.textContent = name;
+      keep[name] = 1;
+      d.className = 'calBox' + ((calibSel !== '__all__' && calibSel !== name) ? ' dim' : '') + (calibSel === name ? ' sel' : '');
+      d.style.left = r.x + 'px'; d.style.top = r.y + 'px';
+      d.style.width = r.w + 'px'; d.style.height = r.h + 'px';
+    }
+    for (var k = 0; k < boxes.length; k++) {
+      var an = boxes[k].getAttribute('data-area');
+      if (!keep[an]) { try { layer.removeChild(boxes[k]); } catch (e3) {} }
+    }
+  } catch (e) {}
+}
+function positionCalibLayer() {
+  try {
+    var cr = $('cv').getBoundingClientRect();
+    var layer = $('calibLayer');
+    layer.style.left = cr.left + 'px'; layer.style.top = cr.top + 'px';
+    layer.style.width = cr.width + 'px'; layer.style.height = cr.height + 'px';
+  } catch (e) {}
+}
+function hideCalibLayer() { try { var l = $('calibLayer'); l.style.display = 'none'; l.innerHTML = ''; } catch (e) {} }
+function showFrames(on) {
+  framesOn = !!on;
+  if (calibOn) { toast(calibOn ? '校准进行中' : ''); return; }
+  try {
+    if (framesOn && selected) { positionCalibLayer(); calibOff = {}; freezeBases(); calibPaint(); $('calibLayer').style.display = 'block'; }
+    else hideCalibLayer();
+  } catch (e) {}
+}
+function syncCalSelect() { try { $('calSel').value = calibSel; } catch (e) {} }
+function enterCalib() {
+  if (!selected) { toast('还没有模型'); return; }
+  if (editMode) confirmLock();                                   // 先把调整固定，避免校准中位置乱动
+  var names = hitAreaNames();
+  if (!names.length) { toast('该模型没有触发区（HitAreas），无需校准'); return; }
+  calibOn = true; calibSel = '__all__'; calibDrag = null; calibBase = {};
+  var e = entryOf(selected);
+  calibOff = JSON.parse(JSON.stringify(calFor(e ? e.url : '')));
+  positionCalibLayer();
+  try {
+    var s = $('calSel'); s.innerHTML = '';
+    var o0 = document.createElement('option'); o0.value = '__all__'; o0.textContent = '全选（所有区域一起移动）'; s.appendChild(o0);
+    names.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; s.appendChild(o); });
+    s.value = '__all__';
+    $('calibLayer').style.display = 'block';
+    $('calibbar').style.display = 'block';
+  } catch (e2) {}
+  try { closePanel(); closeAdjust(); } catch (e2) {}
+  freezeBases(); calibPaint(); updateLockUI();
+  toast('校准中：红框=触发区，拖动即校正；点画面可测试命中的区域');
+  diagPaint();
+}
+function exitCalib(save) {
+  calibOn = false; calibDrag = null;
+  try { $('calibbar').style.display = 'none'; } catch (e) {}
+  if (save && selected) {
+    var e = entryOf(selected);
+    calSave(e ? e.url : '', calibOff);
+    toast('触发区校准已保存（点击判定按红框执行）');
+  } else toast('已退出校准（未保存）');
+  calibOff = {}; calibBase = {};
+  if (framesOn && selected) { positionCalibLayer(); freezeBases(); calibPaint(); try { $('calibLayer').style.display = 'block'; } catch (e) {} }
+  else hideCalibLayer();
+  updateLockUI(); diagPaint();
+}
+function calibLayerDown(e) {
+  if (!calibOn) return;
+  var el = null;
+  try { el = e.target && e.target.closest ? e.target.closest('.calBox') : null; } catch (e2) { el = null; }
+  if (!el) return;
+  e.preventDefault(); e.stopPropagation();
+  try { if (e.pointerId !== undefined && el.setPointerCapture) el.setPointerCapture(e.pointerId); } catch (e3) {}
+  var area = el.getAttribute('data-area');
+  if (calibSel !== '__all__' && calibSel !== area) { calibSel = area; syncCalSelect(); calibPaint(); }
+  calibDrag = { x: e.clientX, y: e.clientY, area: (calibSel === '__all__') ? '__all__' : area };
+}
+function calibLayerMove(e) {
+  if (!calibDrag || !calibOn || !selected) return;
+  e.preventDefault();
+  var kx = selected.scale.x || 1, ky = selected.scale.y || 1;
+  var ddx = (e.clientX - calibDrag.x) / kx, ddy = (e.clientY - calibDrag.y) / ky;
+  if (calibDrag.area === '__all__') {
+    var names = hitAreaNames();
+    for (var i = 0; i < names.length; i++) { var o = calibOff[names[i]] || (calibOff[names[i]] = { dx: 0, dy: 0 }); o.dx += ddx; o.dy += ddy; }
+  } else {
+    var o2 = calibOff[calibDrag.area] || (calibOff[calibDrag.area] = { dx: 0, dy: 0 }); o2.dx += ddx; o2.dy += ddy;
+  }
+  calibDrag.x = e.clientX; calibDrag.y = e.clientY;
+  calibPaint();
+}
+function calibLayerUp() { calibDrag = null; }
+/* 融合 Live2D-Viewer 的在线仓库浏览（中文版；默认输入为 # 占位） */
+function openExplorer() { try { $('explorer').classList.add('open'); $('mask').style.display = 'block'; } catch (e) {} }
+function closeExplorer() { try { $('explorer').classList.remove('open'); $('mask').style.display = 'none'; } catch (e) {} }
+var EX = { owner: '', repo: '', path: '' };
+function exStatus(msg) { try { $('exStatus').textContent = '状态：' + msg; } catch (e) {} }
+function exCrumb(p) {
+  try {
+    var box = $('exCrumb'); box.innerHTML = '';
+    var root = document.createElement('a'); root.textContent = '根目录'; root.onclick = function () { exLoad(''); };
+    box.appendChild(root);
+    (p ? p.split('/') : []).forEach(function (seg) {
+      box.appendChild(document.createTextNode(' / '));
+      var sp = document.createElement('span'); sp.textContent = seg; box.appendChild(sp);
+    });
+  } catch (e) {}
+}
+function exLoad(path) {
+  EX.path = path || '';
+  exCrumb(EX.path);
+  var list = $('exList');
+  list.innerHTML = '<p class="featEmpty">正在载入…</p>';
+  $('exPreview').innerHTML = '';
+  exStatus('请求中：' + (EX.owner + '/' + EX.repo + '/' + EX.path));
+  fetch('https://api.github.com/repos/' + EX.owner + '/' + EX.repo + '/contents/' + EX.path, { headers: { Accept: 'application/vnd.github.v3+json' } })
+    .then(function (r) { if (!r.ok) throw new Error('GitHub API HTTP ' + r.status); return r.json(); })
+    .then(function (data) {
+      var items = Array.isArray(data) ? data : [data];
+      list.innerHTML = '';
+      items.sort(function (a, b) {
+        if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+        return String(a.name).localeCompare(String(b.name), undefined, { numeric: true });
+      });
+      if (!items.length) { list.innerHTML = '<p class="featEmpty">该目录为空。</p>'; exStatus('空目录'); return; }
+      items.forEach(function (it) {
+        var row = document.createElement('div'); row.className = 'exItem';
+        var nm = document.createElement('span'); nm.className = 'nm';
+        nm.textContent = (it.type === 'dir' ? '📁 ' : (/\.(png|jpg|jpeg|gif|webp)$/i.test(it.name) ? '🖼 ' : '📄 ')) + it.name;
+        row.appendChild(nm);
+        if (it.type === 'file' && /model3?[-\w]*\.json$/i.test(it.name)) {
+          var imp = document.createElement('button'); imp.className = 'btn pri'; imp.textContent = '载入模型';
+          imp.onclick = function (ev) {
+            ev.stopPropagation();
+            var url = 'https://raw.githubusercontent.com/' + EX.owner + '/' + EX.repo + '/master/' + it.path;
+            loadModel(url, it.name); closeExplorer();
+          };
+          row.appendChild(imp);
+        }
+        row.onclick = function () {
+          if (it.type === 'dir') { exLoad(it.path); return; }
+          exPreview(it);
+        };
+        list.appendChild(row);
+      });
+      exStatus('已载入 ' + items.length + ' 项');
+    })
+    .catch(function (e) {
+      list.innerHTML = '<p class="featEmpty">载入失败：' + e.message + '</p>';
+      exStatus('载入失败（检查网络 / Owner / Repo）');
+    });
+}
+function exPreview(it) {
+  var box = $('exPreview');
+  box.innerHTML = '<p class="featEmpty">读取中：' + it.name + '</p>';
+  var url = 'https://raw.githubusercontent.com/' + EX.owner + '/' + EX.repo + '/master/' + it.path;
+  fetch(url)
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return /\.(png|jpg|jpeg|gif|webp)$/i.test(it.name) ? r.blob().then(function (b) { return URL.createObjectURL(b); }) : r.text(); })
+    .then(function (data) {
+      box.innerHTML = '';
+      var wrap = document.createElement('div'); wrap.className = 'exPrev';
+      var title = document.createElement('div'); title.className = 'cfM'; title.textContent = it.name; wrap.appendChild(title);
+      if (typeof data === 'string' && !/^blob:/.test(data)) {
+        var pre = document.createElement('pre'); pre.textContent = data.length > 8000 ? (data.slice(0, 8000) + '\n…（已截断预览）') : data; wrap.appendChild(pre);
+      } else {
+        var img = document.createElement('img'); img.src = data; wrap.appendChild(img);
+      }
+      box.appendChild(wrap);
+    })
+    .catch(function (e) { box.innerHTML = '<p class="featEmpty">预览失败：' + e.message + '</p>'; });
+}
+/* ---------- 侧边栏 / 全屏 / 确认框 ---------- */
+function openPanel() { try { $('sidebar').classList.add('open'); $('mask').style.display = 'block'; syncSliders(); syncBgLabels(); refreshSnaps(); } catch (e) {} }
+function closePanel() { try { $('sidebar').classList.remove('open'); $('mask').style.display = 'none'; } catch (e) {} }
+window.closePanels = closePanel;   // 原生返回键（onBackPressed）调用
+window.closePanel = closePanel;
+function setFullscreen(on) {
+  fullscreenMode = !!on;
+  document.body.classList.toggle('fs', fullscreenMode);
+  if (fullscreenMode) closePanel();
+  try { if (window.L2DNative && L2DNative.setFullscreen) L2DNative.setFullscreen(fullscreenMode); } catch (e) {}
+  layout(); diagPaint();
+}
+function uiConfirm(title, msg, onOk) {
+  try {
+    var box = $('confirm');
+    $('cfT').textContent = title || '确认';
+    $('cfM').textContent = msg || '';
+    box.style.display = 'block';
+    $('cfOk').onclick = function () { box.style.display = 'none'; try { if (onOk) onOk(); } catch (e) {} };
+    $('cfNo').onclick = function () { box.style.display = 'none'; };
+  } catch (e) {}
+}
+window.uiConfirm = uiConfirm;
+
+/* ---------- 滑杆同步 ---------- */
+function syncSliders() {
+  try {
+    $('rgScale').value = Math.round(info.scale * 100); $('vScale').textContent = Math.round(info.scale * 100) + '%';
+    $('rgX').value = info.ox; $('vX').textContent = info.ox;
+    $('rgY').value = info.oy; $('vY').textContent = info.oy;
+    $('rgRot').value = info.rot; $('vRot').textContent = info.rot + '°';
+    $('rgAlpha').value = Math.round(info.alpha * 100); $('vAlpha').textContent = Math.round(info.alpha * 100) + '%';
+  } catch (e) {}
+}
+function syncBgLabels() { try { $('vBg').textContent = $('rgBg').value + '%'; $('vBlur').textContent = $('rgBlur').value; } catch (e) {} }
+
+/* ---------- 背景（图片 / 视频） ---------- */
+function applyBg() { try { var img = $('bgMedia'), vid = $('bgVideo'); img.style.opacity = bgAlpha; vid.style.opacity = bgAlpha; } catch (e) {} }
+function applyBlur(v) { try { var f = 'blur(' + (parseInt(v, 10) || 0) + 'px)'; $('bgMedia').style.filter = f; $('bgVideo').style.filter = f; } catch (e) {} }
+function isVideoUrl(u) { return /\.(mp4|webm|mov|m4v|mkv|3gp|avi)(\?|#|$)/i.test(String(u || '')); }
+function clearBg() {
+  try {
+    var img = $('bgMedia'), vid = $('bgVideo');
+    img.style.display = 'none'; img.removeAttribute('src');
+    vid.style.display = 'none'; try { vid.pause(); vid.removeAttribute('src'); } catch (e) {}
+    $('selBgType').value = 'color';
+  } catch (e) {}
+}
+window.L2DSetBackground = function (url, isVideo) {
+  try {
+    if (!url) return;
+    var img = $('bgMedia'), vid = $('bgVideo');
+    if (isVideo) {
+      img.style.display = 'none';
+      vid.style.display = 'block';
+      vid.src = url; vid.muted = true; vid.loop = true;
+      var p = vid.play(); if (p && p.catch) p.catch(function () {});
+    } else {
+      vid.style.display = 'none'; try { vid.pause(); vid.removeAttribute('src'); } catch (e) {}
+      img.style.display = 'block';
+      img.src = url;
+    }
+    try { $('selBgType').value = isVideo ? 'video' : 'image'; } catch (e) {}
+    applyBg();
+  } catch (e) {}
+};
+window.L2DClearBackground = clearBg;
+function restoreBackground() {
+  try {
+    var url = safe(function (b) { return b.getBackgroundUrl ? b.getBackgroundUrl() : ''; }, '');
+    if (url) { window.L2DSetBackground(url, isVideoUrl(url)); logBoot('已恢复背景：' + url); }
+  } catch (e) {}
+}
+
+/* ---------- 场景快照（背景 + 当前模型的位置大小） ---------- */
+function snapshot() {
+  var e = entryOf(selected);
+  return JSON.stringify({
+    v: 3, bgAlpha: bgAlpha,
+    bgBlur: $('rgBlur') ? $('rgBlur').value : 0,
+    bgType: $('selBgType') ? $('selBgType').value : 'color',
+    model: e ? { name: e.name, url: (/^file:\/\//i.test(e.url) ? e.url : ''), tf: e.tf } : null
+  });
+}
+function saveSnap() {
+  var n = ($('snapName').value || '').trim();
+  if (!n) { toast('请先给场景起个名字'); return; }
+  var ok = safe(function (b) { b.saveScene(n, snapshot()); return true; }, false);
+  toast(ok ? ('已保存场景：' + n) : '保存失败');
+  refreshSnaps();
+}
+function refreshSnaps() {
+  try {
+    var raw = safe(function (b) { return b.listScenes(); }, '[]');
+    var sel = $('selSnap'); sel.innerHTML = '';
+    var arr = null;
+    try { arr = JSON.parse(raw) || []; } catch (e) { arr = []; }
+    if (!arr.length) { var o = document.createElement('option'); o.value = ''; o.textContent = '（还没有快照）'; sel.appendChild(o); return; }
+    arr.forEach(function (n) { var o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
+  } catch (e) {}
+}
+function loadSnap() {
+  var n = $('selSnap').value; if (!n) { toast('还没有快照'); return; }
+  var raw = safe(function (b) { return b.loadScene(n); }, '');
+  if (!raw) { toast('读取失败'); return; }
+  applyScene(raw);
+}
+function applyScene(raw) {
+  try {
+    var s = JSON.parse(raw);
+    bgAlpha = s.bgAlpha || 0.55;
+    try { $('rgBg').value = Math.round(bgAlpha * 100); } catch (e) {}
+    if (s.bgBlur !== undefined) { try { $('rgBlur').value = s.bgBlur; } catch (e) {} applyBlur(s.bgBlur); }
+    var bgUrl = safe(function (b) { return b.getBackgroundUrl ? b.getBackgroundUrl() : ''; }, '');
+    if (bgUrl) window.L2DSetBackground(bgUrl, isVideoUrl(bgUrl));
+    var mm = s.model;
+    if (mm && mm.url) {
+      var st = tfStore(); st[tfKey(mm.url)] = mm.tf || {};
+      try { localStorage.setItem(TF_KEY, JSON.stringify(st)); } catch (e) {}
+      var existing = null;
+      for (var i = 0; i < models.length; i++) if (models[i].url === resolveUrl(mm.url)) existing = models[i];
+      if (existing) { existing.tf = tfGet(existing.url); fitEntry(existing); selectModel(existing.model, true); }
+      else loadModel(mm.url, mm.name || '');
+    }
+    syncBgLabels(); toast('场景已读取');
+  } catch (e) { toast('场景解析失败'); }
+}
+function delSnap() {
+  var n = $('selSnap').value; if (!n) { toast('还没有快照'); return; }
+  uiConfirm('删除场景', '确定删除场景「' + n + '」吗？', function () {
+    safe(function (b) { b.deleteScene(n); }); refreshSnaps(); toast('已删除场景：' + n);
+  });
+}
+
+/* ---------- 诊断角标 ---------- */
+var fps = 0, fpsN = 0, fpsT = Date.now();
+function diagPaint() {
+  try {
+    if (!diagOn) { $('diag').style.display = 'none'; return; }
+    var mm = selected && selected.internalModel && selected.internalModel.motionManager;
+    var ms = (mm && mm.state) ? mm.state : mm;
+    var st = app ? (app.ticker.started ? '跑' : '停') : '无';
+    var g = ms ? String(ms.currentGroup) : '-', i = ms ? String(ms.currentIndex) : '-';
+    var fin = (ms && typeof ms.isFinished === 'function') ? (ms.isFinished() ? '完' : '播') : '';
+    var t = 'FPS ' + fps + '  循环 ' + st + '  Δ' + (app ? Math.round(app.ticker.deltaMS) : 0) + 'ms';
+    t += '\n模型 ' + models.length + ' 个　当前 ' + (info.url ? info.url.split('/').slice(-1)[0] : '-')
+      + '　' + (editMode ? ('调整:' + editMode + (paramMode ? '/' + paramMode : '')) : (calibOn ? '校准中' : '已固定'));
+    t += '\n动作组 ' + g + ' #' + i + (fin ? (' (' + fin + ')') : '');
+    t += '\n点击 ' + tapCount + ' 次　触发区 ' + lastHitNames;
+    t += '\n画布 ' + (app ? Math.round(app.screen.width) + 'x' + Math.round(app.screen.height) + ' @' + (app.renderer ? (app.renderer.resolution || 1) : 1) + 'x' : '-');
+    t += lastErr ? ('\n最后错误 ' + lastErr.split('\n')[0].slice(0, 90)) : '\n最后错误 无';
+    $('diag').textContent = t; $('diag').style.display = 'block';
+  } catch (e) {}
+}
+
+/* ---------- 截屏（融合 Live2D-Viewer；优先交给安卓端保存） ---------- */
+function takeScreenshot() {
+  try {
+    if (!app || !app.renderer || !selected) { toast('还没有模型可截图'); return; }
+    app.renderer.render(app.stage);
+    var data = $('cv').toDataURL('image/png');
+    if (window.L2DNative && L2DNative.saveScreenshot) { L2DNative.saveScreenshot(data); return; }
+    var a = document.createElement('a');
+    a.download = 'live2d_shot.png'; a.href = data; a.click();
+    toast('截图已保存');
+  } catch (e) { toast('截图失败：' + (e && e.message ? e.message : e)); }
+}
+
+/* ---------- 点击自检：防止浮层吞掉画布点击 ---------- */
+function assertCanvasClickable() {
+  try {
+    var cvEl = $('cv');
+    if (!cvEl) return 'no-canvas';
+    if ($('sidebar') && $('sidebar').classList.contains('open')) return 'sidebar-open';
+    var r = cvEl.getBoundingClientRect();
+    var pts = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + r.width * 0.3, r.top + r.height * 0.35], [r.left + r.width * 0.7, r.top + r.height * 0.65]];
+    for (var i = 0; i < pts.length; i++) {
+      var el = document.elementFromPoint(pts[i][0], pts[i][1]);
+      var ok = (el === cvEl) || (el && el.tagName === 'CANVAS') || (el === cvEl.parentNode);
+      if (!ok && el) {
+        var inUI = false;
+        try { inUI = !!(el.closest && el.closest('#sidebar,#topbar,#editbar,#confirm,#tip,#diag,#picker,#explorer,#adjust,#calibbar,#hint-modal,#ctxmenu,#calibLayer')); } catch (e2) { inUI = false; }
+        if (inUI) continue;
+        try { el.style.pointerEvents = 'none'; } catch (e2) {}
+        logBoot('点击自检：' + el.tagName + (el.id ? '#' + el.id : '') + ' 遮挡画布，已禁用其 pointer-events');
+      }
+    }
+  } catch (e) { return 'err:' + e.message; }
+  return 'ok';
+}
+window.L2DClickCheck = assertCanvasClickable;
+
+/* ---------- 环境自检 ---------- */
+function diagnose() {
+  var miss = [];
+  if (typeof PIXI === 'undefined') miss.push('pixi.min.js 未加载');
+  if (typeof Live2DCubismCore === 'undefined') miss.push('live2dcubismcore.min.js 未加载');
+  if (typeof Live2D === 'undefined') miss.push('live2d.min.js(Cubism2.1) 未加载');
+  if (typeof PIXI !== 'undefined' && !(PIXI.live2d && PIXI.live2d.Live2DModel)) miss.push('index.min.js 未加载');
+  if (miss.length) showErr('运行库缺失：' + miss.join('、'));
+  try {
+    var c = document.createElement('canvas');
+    var gl = c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl');
+    if (!gl) showErr('本设备 WebGL 不可用，Live2D 无法渲染，请更新系统 WebView');
+  } catch (e) { showErr('WebGL 检测失败：' + e.message); }
+  return miss.length === 0;
+}
+window.onerror = function (m, s, l) { showErr((m || '脚本错误') + (s ? ('  @' + s + ':' + l) : '')); return false; };
+window.addEventListener('unhandledrejection', function (ev) {
+  var r = ev && ev.reason;
+  showErr('异步错误：' + (r && r.message ? r.message : r));
+});
+
+/* ---------- 快捷键 + 右键菜单（融合 Live2D-Viewer，中文化） ---------- */
+function cycleModel(dir) {
+  var i = models.findIndex(function (x) { return x.model === selected; });
+  if (i < 0 || models.length < 2) return;
+  var n = (i + dir + models.length) % models.length;
+  selectModel(models[n].model, true);
+  toast('已切换：' + (models[n].name || ''));
+}
+function initKeys() {
+  document.addEventListener('keydown', function (event) {
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (event.key === 'Delete' || event.key === 'Backspace') { if (selected) { event.preventDefault(); removeCurrent(); } }
+    else if (event.key === 's' || event.key === 'S') { event.preventDefault(); takeScreenshot(); }
+    else if (event.key === 'h' || event.key === 'H') { event.preventDefault(); $('ckFrames').checked = !$('ckFrames').checked; showFrames($('ckFrames').checked); }
+    else if (event.key === 'Tab') { if (models.length > 1) { event.preventDefault(); cycleModel(event.shiftKey ? -1 : 1); } }
+  });
+}
+var CTX_ID = 'ctxmenu';
+function ctxHide() { try { $(CTX_ID).classList.remove('open'); $(CTX_ID).innerHTML = ''; } catch (e) {} }
+function ctxShow(x, y, items) {
+  try {
+    var menu = $(CTX_ID);
+    menu.innerHTML = '';
+    items.forEach(function (item) {
+      if (item.divider) { var hr = document.createElement('div'); hr.className = 'ctxDiv'; menu.appendChild(hr); return; }
+      var b = document.createElement('button');
+      b.className = 'ctxItem'; b.textContent = item.label; b.disabled = !!item.disabled;
+      if (!item.disabled) b.onclick = function () { ctxHide(); try { item.action(); } catch (e) {} };
+      menu.appendChild(b);
+    });
+    menu.classList.add('open');
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var mw = menu.offsetWidth || 200, mh = menu.offsetHeight || 200;
+    menu.style.left = Math.min(x, vw - mw - 8) + 'px';
+    menu.style.top = Math.min(y, vh - mh - 8) + 'px';
+  } catch (e) {}
+}
+function initCtx() {
+  document.addEventListener('contextmenu', function (event) {
+    event.preventDefault();
+    if ($('explorer').classList.contains('open')) {
+      ctxShow(event.clientX, event.clientY, [
+        { label: '🔄 刷新仓库列表', action: function () { exLoad(EX.path); } },
+        { label: '⌂ 回到根目录', action: function () { exLoad(''); } },
+        { divider: true },
+        { label: '✕ 关闭浏览器', action: closeExplorer }
+      ]);
+      return;
+    }
+    ctxShow(event.clientX, event.clientY, [
+      { label: '📷 截图（S）', disabled: !selected, action: takeScreenshot },
+      { label: '🎯 显示触发区红框（H）', disabled: !selected, action: function () { $('ckFrames').checked = !$('ckFrames').checked; showFrames($('ckFrames').checked); } },
+      { label: '🗑 移除当前模型（Del）', disabled: !selected, action: removeCurrent },
+      { divider: true },
+      { label: '▶ 下一个模型（Tab）', disabled: models.length < 2, action: function () { cycleModel(1); } },
+      { label: '◀ 上一个模型（Shift+Tab）', disabled: models.length < 2, action: function () { cycleModel(-1); } }
+    ]);
+  });
+  document.addEventListener('click', function (event) {
+    if (!$(CTX_ID).contains(event.target)) ctxHide();
+  });
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') ctxHide(); });
+}
+
+/* ---------- 按钮绑定 ---------- */
+function on(id, fn) { try { var el = $(id); if (el) el.onclick = fn; } catch (e) {} }
+function bindButtons() {
+  on('menubtn', openPanel);
+  on('sbclose', closePanel);
+  on('mask', function () { closePanel(); closePicker(); closeExplorer(); });
+  on('pickerbtn', openPicker);
+  on('pkClose', closePicker);
+  on('tabLib', function () { setPickerTab('lib'); });
+  on('tabLocal', function () { setPickerTab('local'); });
+  on('btnImport', function () { safe(function (b) { b.importModel(); }); });
+  on('btnPicker', openPicker);
+  on('btnBuiltin', function () { loadModel('sample/Mark/Mark.model3.json', 'Mark（内置·男）'); closePanel(); });
+  on('btnRemove', removeCurrent);
+  on('btnClearAll', clearAllModels);
+  on('btnHelp', function () { $('hint-modal').style.display = 'block'; });
+  on('hintOk', function () { $('hint-modal').style.display = 'none'; });
+  /* 调整模型 */
+  on('btnAdjust', openAdjust);
+  on('btnLock', confirmLock);
+  on('btnCalib', enterCalib);
+  on('adjGlobal', function () { closeAdjust(); setEditMode('global'); });
+  on('adjParam', showAdjParams);
+  on('adjBack', function () { try { $('adjMain').style.display = 'block'; $('adjParams').style.display = 'none'; $('adjBack').style.display = 'none'; } catch (e) {} });
+  on('adjCalib', function () { closeAdjust(); enterCalib(); });
+  on('adjCancel', cancelEdit);
+  on('adjOk', confirmLock);
+  (function () {
+    var chips = document.querySelectorAll('.adjP');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].onclick = (function (el) { return function () { pickParam(el.getAttribute('data-p')); }; })(chips[i]);
+    }
+  })();
+  /* 属性滑杆：调整模式下按门控解锁 */
+  var canAdjust = function (p) { return editMode === 'global' || (editMode === 'param' && paramMode === p); };
+  var bindRange = function (id, fn, gate) {
+    try {
+      var el = $(id); if (!el) return;
+      el.oninput = function () { if (gate && !canAdjust(gate)) { syncSliders(); return; } fn(parseInt(this.value, 10) || 0); };
+    } catch (e) {}
+  };
+  bindRange('rgScale', function (v) { info.scale = (v || 100) / 100; syncSliders(); fit(); }, 'scale');
+  bindRange('rgX', function (v) { info.ox = v; syncSliders(); fit(); }, 'ox');
+  bindRange('rgY', function (v) { info.oy = v; syncSliders(); fit(); }, 'oy');
+  bindRange('rgRot', function (v) { info.rot = v; syncSliders(); fit(); }, 'rot');
+  bindRange('rgAlpha', function (v) { info.alpha = Math.max(0.1, (v || 100) / 100); syncSliders(); fit(); });
+  /* 校准 */
+  try {
+    $('calSel').onchange = function () { calibSel = this.value; calibPaint(); };
+    $('calRefresh').onclick = function () { freezeBases(); calibPaint(); toast('已刷新红框位置'); };
+    $('calReset').onclick = function () { calibOff = {}; calibPaint(); toast('校准已重置（点「保存并退出」生效）'); };
+    $('calExit').onclick = function () { exitCalib(false); };
+    $('calSave').onclick = function () { exitCalib(true); };
+    $('calibLayer').addEventListener('pointerdown', calibLayerDown);
+    window.addEventListener('pointermove', calibLayerMove);
+    window.addEventListener('pointerup', calibLayerUp);
+  } catch (e) {}
+  /* 背景与场景 */
+  on('btnImportBg', function () { safe(function (b) { b.importBackground(); }); });
+  on('btnClearBg', function () { clearBg(); toast('已清除背景'); });
+  try {
+    $('rgBg').oninput = function () { bgAlpha = (parseInt(this.value, 10) || 0) / 100; syncBgLabels(); applyBg(); };
+    $('rgBlur').oninput = function () { syncBgLabels(); applyBlur(this.value); };
+    $('ckBgPlay').onchange = function () {
+      try { var v = $('bgVideo'); if (this.checked) { if (v.src) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } } else v.pause(); } catch (e) {}
+    };
+    $('selBgType').onchange = function () { if (this.value === 'color') { clearBg(); toast('已切回纯色背景'); } else toast('点「选择背景文件」选图片或视频'); };
+    $('btnSaveSnap').onclick = saveSnap;
+    $('btnLoadSnap').onclick = loadSnap;
+    $('btnDelSnap').onclick = delSnap;
+  } catch (e) {}
+  /* 交互与显示 */
+  try {
+    $('ckFrames').onchange = function () { showFrames(this.checked); };
+    $('ckTapToast').checked = tapToastEnabled;
+    $('ckTapToast').onchange = function () { tapToastEnabled = this.checked; try { localStorage.setItem('l2d_tap_toast', tapToastEnabled ? '1' : '0'); } catch (e) {} };
+    $('ckDiag').checked = diagOn;
+    $('ckDiag').onchange = function () { diagOn = this.checked; try { localStorage.setItem('l2d_diag', diagOn ? '1' : '0'); } catch (e) {} diagPaint(); };
+    $('ckEye').onchange = function () {
+      try { if (selected && selected.internalModel) { var im = selected.internalModel; if (this.checked) { im.eyeBlink = im.eyeBlink || (im.motionManager && im.motionManager.eyeBlink); } else { im.eyeBlink = null; } } } catch (e) {}
+      toast(this.checked ? '已开启自动眨眼' : '已关闭自动眨眼');
+    };
+    $('ckBreath').onchange = function () {
+      try { if (selected && selected.internalModel && selected.internalModel.breath) selected.internalModel.breath.enabled = this.checked; } catch (e) {}
+      toast(this.checked ? '已开启呼吸' : '已关闭呼吸');
+    };
+  } catch (e) {}
+  on('btnShot', takeScreenshot);
+  on('btnFsIn', function () { setFullscreen(true); });
+  on('btnFsOut', function () { setFullscreen(false); });
+  on('btnExit', function () { safe(function (b) { b.exit(); }); });
+  /* 仓库浏览 */
+  on('exClose', closeExplorer);
+  on('exLoad', function () {
+    EX.owner = ($('exOwner').value || '').trim();
+    EX.repo = ($('exRepo2').value || '').trim();
+    if (!EX.owner || !EX.repo || EX.owner === '#' || EX.repo === '#') { toast('请先填写 Owner / Repo（当前为 # 占位）'); exStatus('等待填写 Owner / Repo'); return; }
+    exLoad('');
+  });
+  try {
+    var enterLoad = function (e) { if (e.key === 'Enter') $('exLoad').click(); };
+    $('exOwner').addEventListener('keydown', enterLoad);
+    $('exRepo2').addEventListener('keydown', enterLoad);
+  } catch (e) {}
+}
+
+/* ---------- 桥接对外入口（Java 侧 evaluateJavascript 调用） ---------- */
+window.L2DRefresh = function () { try { refreshChips(); renderPicker(); } catch (e) {} };
+window.L2DLoadModel = function (name) {
+  try {
+    var arr = listLocalModels();
+    for (var i = 0; i < arr.length; i++) {
+      if ((arr[i].name || '') === name) { loadModel(arr[i].url, arr[i].name); renderPicker(); return; }
+    }
+    refreshChips(); renderPicker();
+    toast('未找到模型：' + name);
+  } catch (e) {}
+};
+window.L2DToast = toast;
+window.L2DSetVolume = function (v) { try { soundVolume = Math.max(0, Math.min(1, Number(v))); } catch (e) {} };
+
+/* ---------- 启动 ---------- */
+(function boot() {
+  try { diagnose(); } catch (e) {}
+  try { initApp(); } catch (e) { showErr('初始化失败：' + (e && e.message ? e.message : e)); return; }
+  try { tapToastEnabled = (localStorage.getItem('l2d_tap_toast') === '1'); } catch (e) {}
+  try { diagOn = (localStorage.getItem('l2d_diag') === '1'); } catch (e) {}
+  bindButtons(); initKeys(); initCtx();
+  refreshChips(); updateLoadedInfo(); refreshSnaps(); renderPicker();
+  syncSliders(); syncBgLabels(); applyBg(); updateLockUI();
+  restoreBackground();
+  var qs = null;
+  try { qs = new URLSearchParams(location.search).get('model'); } catch (e) {}
+  if (qs) { loadModel(qs, ''); }
+  else {
+    var locals = listLocalModels();
+    if (locals.length) loadModel(locals[0].url, locals[0].name);
+    else loadModel('sample/Mark/Mark.model3.json', 'Mark（内置·男）');
+  }
+  logBoot('页面=' + location.href + '｜协议=' + location.protocol + '｜本地模型=' + listLocalModels().length + ' 个');
+})();
+</script>
 </body>
-
 </html>
